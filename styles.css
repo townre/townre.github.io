@@ -284,35 +284,41 @@ body {
 }
 
 .select-group {
-    display: flex;
+    display: inline-flex;
+    position: relative;
     align-items: center;
-    gap: 8px;
-    background: var(--bg-surface);
-    padding: 8px 12px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--glass-border);
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: var(--radius-full);
+    width: 40px;
+    height: 40px;
+}
+
+.select-group:hover, .select-group:focus-within {
+    color: var(--accent);
+    background-color: var(--highlight);
+    transform: scale(1.05);
 }
 
 .select-group i {
-    color: var(--text-secondary);
+    position: absolute;
+    pointer-events: none;
+    font-size: 24px;
 }
 
 .select-group select {
-    background: var(--bg-surface);
-    border: none;
-    color: var(--text-primary);
-    font-family: var(--font-ui);
-    font-size: 14px;
-    outline: none;
+    opacity: 0;
+    width: 40px;
+    height: 40px;
     cursor: pointer;
-    max-width: 150px;
-    padding: 4px;
-    border-radius: 4px;
-}
-
-.select-group select option {
-    background: var(--bg-surface);
-    color: var(--text-primary);
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
 /* Modals */
@@ -453,9 +459,6 @@ body {
     .bottom-controller {
         width: calc(100% - 32px);
         padding: 0 16px;
-    }
-    .select-group select {
-        max-width: 100px;
     }
     .app-header h1 {
         display: none;
