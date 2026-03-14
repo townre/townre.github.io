@@ -462,18 +462,17 @@ body.page-mode-active {
 body.page-mode-active .app-main {
     overflow-y: hidden;
     overflow-x: hidden; /* JS scrolling exclusively for snapping */
-    padding: 16px 0;    /* Remove horizontal padding to let columns touch edges */
+    padding: 0;    /* Remove all padding to guarantee exact view bounds */
     display: block; /* override flex */
 }
 
 body.page-mode-active #text-container {
     max-width: none;
-    height: calc(100vh - var(--header-height) - 130px);
+    height: calc(100vh - var(--header-height) - var(--controller-height) - 40px);
     column-width: 100vw;
     column-gap: 0;
     column-fill: auto;
-    padding-left: 20px;
-    padding-right: 20px;
+    padding: 24px 40px;
     box-sizing: border-box;
     /* Typography adjustments to prevent bad breaks across columns */
     orphans: 2;

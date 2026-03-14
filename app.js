@@ -353,7 +353,7 @@ function jumpSentence(offset) {
 function turnPage(direction) {
     if (!AppState.pageMode) return;
     const scrollAmount = window.innerWidth;
-    DOM.appMain.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+    DOM.appMain.scrollBy({ left: scrollAmount * direction, behavior: 'auto' });
 }
 
 function syncViewToSentence() {
@@ -372,7 +372,7 @@ function syncViewToSentence() {
         
         DOM.appMain.scrollTo({
             left: pageBoundary,
-            behavior: 'smooth'
+            behavior: 'auto'
         });
     } else {
         // Vanilla Scroll Mode
