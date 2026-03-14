@@ -756,6 +756,10 @@ async function playCurrentSentence() {
     const cacheKey = `${AppState.voice}_${AppState.speed}_${textToRead}`;
     const cachedBlob = await getAudioFromCache(cacheKey);
 
+    // Background preload the next two sentences
+    preloadSentence(AppState.progress + 1);
+    preloadSentence(AppState.progress + 2);
+
     if (cachedBlob) {
         if (currentGen !== playGeneration) return;
 
@@ -787,10 +791,6 @@ async function playCurrentSentence() {
         }
         return;
     }
-
-    // Background preload the next two sentences
-    preloadSentence(AppState.progress + 1);
-    preloadSentence(AppState.progress + 2);
 
     try {
         const ssml = `
