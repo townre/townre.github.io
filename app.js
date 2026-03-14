@@ -404,6 +404,7 @@ function parseAndRenderText(rawText, isRestore = false) {
         AppState.currentPage = 0; // Don't carry over the old file's page position
     }
     buildPages();
+    renderSentences();
 
     if (isRestore) {
         DOM.fileName.textContent = "Restored from session";
