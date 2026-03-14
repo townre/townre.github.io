@@ -454,6 +454,56 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Page Mode Overrides */
+body.page-mode-active {
+    overflow: hidden; /* Prevent all native scrolling */
+}
+
+body.page-mode-active .app-main {
+    overflow-y: hidden;
+    overflow-x: hidden; /* JS scrolling exclusively for snapping */
+    padding: 16px 0;    /* Remove horizontal padding to let columns touch edges */
+    display: block; /* override flex */
+}
+
+body.page-mode-active #text-container {
+    max-width: none;
+    height: calc(100vh - var(--header-height) - 130px);
+    column-width: 100vw;
+    column-gap: 0;
+    column-fill: auto;
+    padding-left: 20px;
+    padding-right: 20px;
+    box-sizing: border-box;
+    /* Typography adjustments to prevent bad breaks across columns */
+    orphans: 2;
+    widows: 2;
+}
+
+body.page-mode-active .paragraph {
+    margin-bottom: 24px;
+    break-inside: avoid; /* try not to split paragraphs across pages */
+}
+
+/* Page Navigation Overlays */
+.page-zone {
+    position: fixed;
+    top: var(--header-height);
+    bottom: 80px; /* above controller */
+    width: 25vw;
+    z-index: 10;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.page-zone.left { left: 0; }
+.page-zone.right { right: 0; }
+
+.page-zone:hover {
+    background-color: var(--highlight);
+    opacity: 0.1; /* Very subtle hit zone indicator */
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .bottom-controller {
