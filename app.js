@@ -7,12 +7,38 @@ const AppState = {
     theme: localStorage.getItem('tts_theme') || 'dark',
     pageMode: localStorage.getItem('tts_pageMode') === 'true',
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
+    currentFileName: localStorage.getItem('tts_current_filename') || '',
     sentences: [],
     paragraphData: [],
     pages: [],        // array of arrays of sentence indices per page (page mode)
     currentPage: 0,   // which page is displayed in page mode
     isPlaying: false
 };
+
+// Per-file progress helpers — stores { reading: N, viewport: N } per filename
+function getFileProgressMap() {
+    try { return JSON.parse(localStorage.getItem('tts_fileProgress') || '{}'); }
+    catch { return {}; }
+}
+function getFileProgress(filename) {
+    const entry = getFileProgressMap()[filename];
+    if (!entry) return { reading: 0, viewport: 0 };
+    // Backward compat: old format was just a number
+    if (typeof entry === 'number') return { reading: entry, viewport: entry };
+    return { reading: entry.reading ?? 0, viewport: entry.viewport ?? 0 };
+}
+function saveReadingProgress(filename, index) {
+    const map = getFileProgressMap();
+    const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: 0 };
+    map[filename] = { ...entry, reading: index };
+    try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch {}
+}
+function saveViewportProgress(filename, index) {
+    const map = getFileProgressMap();
+    const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: 0 };
+    map[filename] = { ...entry, viewport: index };
+    try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch {}
+}
 
 const DOM = {
     // Header
@@ -55,6 +81,14 @@ async function init() {
     // Check if we have previously loaded text in localStorage
     const savedText = localStorage.getItem('tts_current_text');
     if (savedText) {
+        // Restore both pointers for the previously open file
+        AppState.currentFileName = localStorage.getItem('tts_current_filename') || '';
+        if (AppState.currentFileName) {
+            const { reading, viewport } = getFileProgress(AppState.currentFileName);
+            AppState.progress = reading;
+            localStorage.setItem('tts_progress', reading);
+            AppState._restoreViewport = viewport; // used once by restoreViewport() after render
+        }
         parseAndRenderText(savedText, true);
     }
 
@@ -90,11 +124,16 @@ function setupEventListeners() {
             const text = event.target.result;
             try {
                 localStorage.setItem('tts_current_text', text); // Cache for refresh
+                localStorage.setItem('tts_current_filename', file.name);
             } catch (err) {
                 console.warn("File too large to save to localStorage.");
             }
-            AppState.progress = 0;
-            localStorage.setItem('tts_progress', 0);
+            // Restore per-file progress (reading + viewport), or start from 0 for a new file
+            AppState.currentFileName = file.name;
+            const { reading, viewport } = getFileProgress(file.name);
+            AppState.progress = reading;
+            localStorage.setItem('tts_progress', reading);
+            AppState._restoreViewport = viewport;
             parseAndRenderText(text);
         };
         reader.readAsText(file);
@@ -163,6 +202,17 @@ function setupEventListeners() {
         AppState.speed = e.target.value;
         localStorage.setItem('tts_speed', AppState.speed);
     });
+
+    // Viewport tracking: debounced scroll saves the first visible sentence index
+    let scrollTimer = null;
+    window.addEventListener('scroll', () => {
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+            if (AppState.pageMode || !AppState.currentFileName) return;
+            const idx = getFirstVisibleSentenceIndex();
+            if (idx !== -1) saveViewportProgress(AppState.currentFileName, idx);
+        }, 300);
+    }, { passive: true });
 }
 
 function applyTheme(theme) {
@@ -187,8 +237,13 @@ function applyPageMode(isPageMode) {
         DOM.pageZoneRight.classList.add('hidden');
     }
     
-    // Ensure we are snapping to the right place after reflow
-    setTimeout(() => syncViewToSentence(), 50);
+    // Re-render content for the new mode (shows all sentences in scroll mode, or current page in page mode)
+    if (AppState.sentences.length > 0) {
+        renderSentences();
+    } else {
+        // Ensure we are snapping to the right place after reflow
+        setTimeout(() => syncViewToSentence(), 50);
+    }
 }
 
 function showToast(message) {
@@ -278,13 +333,22 @@ function parseAndRenderText(rawText, isRestore = false) {
         }
     });
 
+    // Build pages FIRST so renderSentences has correct page data for the new file
+    if (!isRestore) {
+        AppState.currentPage = 0; // Don't carry over the old file's page position
+    }
+    buildPages();
     renderSentences();
     
     if (isRestore) {
         DOM.fileName.textContent = "Restored from session";
     }
-    
-    buildPages();
+
+    // After render, scroll to the viewport pointer if one was set
+    if (AppState._restoreViewport !== undefined) {
+        restoreViewport(AppState._restoreViewport);
+        AppState._restoreViewport = undefined;
+    }
 }
 
 // Build discrete pages for Page Mode by grouping sentences until a char threshold is hit
@@ -315,7 +379,7 @@ function findPageForSentence(sentenceIndex) {
     return 0;
 }
 
-function renderSentences() {
+function renderSentences(skipSync = false) {
     DOM.textContainer.innerHTML = '';
     
     if (AppState.sentences.length === 0) {
@@ -365,9 +429,7 @@ function renderSentences() {
         updatePageIndicator();
     }
 
-    if (AppState.sentences.length > 0) {
-        setTimeout(syncViewToSentence, 100);
-    }
+
 }
 
 function updatePageIndicator() {
@@ -393,11 +455,23 @@ function selectSentence(index) {
     // Setting new active
     AppState.progress = index;
     localStorage.setItem('tts_progress', AppState.progress);
+    // Save as the reading pointer in the per-file map
+    if (AppState.currentFileName) {
+        saveReadingProgress(AppState.currentFileName, index);
+    }
     
     const newActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (newActive) newActive.classList.add('active');
     
-    syncViewToSentence();
+    // In page mode, flip to the page containing the new sentence (no auto-scroll in scroll mode)
+    if (AppState.pageMode) {
+        const targetPage = findPageForSentence(index);
+        if (targetPage !== AppState.currentPage) {
+            AppState.currentPage = targetPage;
+            renderSentences(true);
+            DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
+        }
+    }
     
     if (AppState.isPlaying) {
         playCurrentSentence();
@@ -413,9 +487,14 @@ function turnPage(direction) {
     const newPage = AppState.currentPage + direction;
     if (newPage < 0 || newPage >= AppState.pages.length) return;
     AppState.currentPage = newPage;
-    renderSentences();
+    renderSentences(true); // skipSync so we don't snap back to active sentence's page
     // Scroll to top of the new page
     DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
+    // Track the first sentence of the new page as the viewport pointer
+    if (AppState.currentFileName) {
+        const firstOnPage = AppState.pages[newPage]?.[0] ?? 0;
+        saveViewportProgress(AppState.currentFileName, firstOnPage);
+    }
 }
 
 function syncViewToSentence() {
@@ -434,6 +513,37 @@ function syncViewToSentence() {
     }
     // Scroll to top of page
     DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+// Returns the sentence index of the first sentence currently visible in the viewport (-1 if none)
+function getFirstVisibleSentenceIndex() {
+    const spans = DOM.textContainer.querySelectorAll('.sentence');
+    for (const span of spans) {
+        const rect = span.getBoundingClientRect();
+        if (rect.bottom > 0 && rect.top < window.innerHeight) {
+            return parseInt(span.dataset.index);
+        }
+    }
+    return -1;
+}
+
+// Scrolls the view to the viewport pointer without changing the active (reading) sentence
+function restoreViewport(viewportIndex) {
+    if (AppState.pageMode) {
+        // In page mode, navigate to the page that contains the viewport sentence
+        const targetPage = findPageForSentence(viewportIndex);
+        if (targetPage !== AppState.currentPage) {
+            AppState.currentPage = targetPage;
+            renderSentences(true);
+        }
+        DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
+    } else {
+        // In scroll mode, scroll the sentence element into view (top-aligned, instant)
+        setTimeout(() => {
+            const el = DOM.textContainer.querySelector(`.sentence[data-index="${viewportIndex}"]`);
+            if (el) el.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }, 150);
+    }
 }
 
 // IndexedDB Wrapper for Audio Cache
