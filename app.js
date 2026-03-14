@@ -22,6 +22,8 @@ const DOM = {
     settingsModal: document.getElementById('settings-modal'),
     closeSettings: document.getElementById('close-settings'),
     saveSettings: document.getElementById('save-settings'),
+    clearCacheBtn: document.getElementById('clear-cache-btn'),
+    cacheSizeSpan: document.getElementById('cache-size'),
     azureKey: document.getElementById('azure-key'),
     azureRegion: document.getElementById('azure-region'),
     toastContainer: document.getElementById('toast-container'),
@@ -34,12 +36,13 @@ const DOM = {
     speedSelect: document.getElementById('speed-select')
 };
 
-function init() {
+async function init() {
     applyTheme(AppState.theme);
+    await initDB();
     setupEventListeners();
     populateSettingsModal();
     
-    // Check if we have previously loaded text in localStorage (for a real app, this might be too large, but for simple txt reading we can try)
+    // Check if we have previously loaded text in localStorage
     const savedText = localStorage.getItem('tts_current_text');
     if (savedText) {
         parseAndRenderText(savedText, true);
@@ -99,6 +102,15 @@ function setupEventListeners() {
         fetchVoices();
     });
     
+    // Clear Cache
+    DOM.clearCacheBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to clear all downloaded audio?')) {
+            await clearAudioCache();
+            showToast('Audio cache cleared');
+            updateCacheSizeUI();
+        }
+    });
+    
     // Controller Event Placeholders
     DOM.btnPlayPause.addEventListener('click', togglePlayPause);
     DOM.btnPrev.addEventListener('click', () => jumpSentence(-1));
@@ -136,6 +148,14 @@ function showToast(message) {
 function populateSettingsModal() {
     DOM.azureKey.value = AppState.apiKey;
     DOM.azureRegion.value = AppState.region;
+    updateCacheSizeUI();
+}
+
+async function updateCacheSizeUI() {
+    const size = await getCacheSize();
+    if (DOM.cacheSizeSpan) {
+        DOM.cacheSizeSpan.textContent = size;
+    }
 }
 
 // Basic Text parsing into sentences using Regex (Fallback if Intl.Segmenter is complex, but let's try a simple approach)
@@ -259,10 +279,68 @@ function focusActiveSentence() {
     }
 }
 
+// IndexedDB Wrapper for Audio Cache
+let db;
+const DB_NAME = 'TTSAudioCache';
+const STORE_NAME = 'audioBlobs';
+
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onerror = (e) => {
+            console.error("IndexedDB error", e);
+            resolve(null); // fail gracefully
+        };
+        request.onsuccess = (e) => {
+            db = e.target.result;
+            resolve(db);
+        };
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            db.createObjectStore(STORE_NAME);
+        };
+    });
+}
+
+function saveAudioToCache(key, blob) {
+    if (!db) return;
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(blob, key);
+    tx.oncomplete = () => updateCacheSizeUI();
+}
+
+function getAudioFromCache(key) {
+    return new Promise((resolve) => {
+        if (!db) return resolve(null);
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const getReq = tx.objectStore(STORE_NAME).get(key);
+        getReq.onsuccess = (e) => resolve(e.target.result);
+        getReq.onerror = () => resolve(null);
+    });
+}
+
+function clearAudioCache() {
+    return new Promise((resolve) => {
+        if (!db) return resolve();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).clear();
+        tx.oncomplete = () => resolve();
+    });
+}
+
+function getCacheSize() {
+    return new Promise((resolve) => {
+        if (!db) return resolve(0);
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const countReq = tx.objectStore(STORE_NAME).count();
+        countReq.onsuccess = (e) => resolve(e.target.result);
+        countReq.onerror = () => resolve(0);
+    });
+}
+
 // Azure TTS logic
 let currentAudio = new Audio();
 let playGeneration = 0; // Async race condition guard
-const AudioCache = new Map();
 
 async function fetchVoices() {
     if (!AppState.apiKey || !AppState.region) return;
@@ -337,15 +415,20 @@ async function playCurrentSentence() {
 
     updatePlayBtnUI(); // Ensure UI reflects loading/playing state immediately
     
-    // Check if we already synthesized this exact sentence with these settings
+    // Check if we already synthesized this exact sentence with these settings in persistent Cache
     const cacheKey = `${AppState.voice}_${AppState.speed}_${textToRead}`;
-    if (AudioCache.has(cacheKey)) {
+    const cachedBlob = await getAudioFromCache(cacheKey);
+    
+    if (cachedBlob) {
         if (currentGen !== playGeneration) return;
         
-        currentAudio.src = AudioCache.get(cacheKey);
+        const url = URL.createObjectURL(cachedBlob);
+        currentAudio.src = url;
         
         currentAudio.onended = () => {
-            if (currentGen !== playGeneration) return; // Prevent old hooks from firing
+            if (currentGen !== playGeneration) return; // Prevent old hooks
+            
+            URL.revokeObjectURL(url); // clean up memory after play
             
             if (AppState.isPlaying) {
                 if (AppState.progress < AppState.sentences.length - 1) {
@@ -395,10 +478,11 @@ async function playCurrentSentence() {
         if (currentGen !== playGeneration) return;
 
         const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
         
-        // Cache this sentence 
-        AudioCache.set(cacheKey, url);
+        // Save the Blob permanently to IndexedDB
+        saveAudioToCache(cacheKey, blob);
+        
+        const url = URL.createObjectURL(blob);
         
         // Use the existing audio element to satisfy Mobile Safari/Edge gesture constraints
         currentAudio.src = url;
@@ -406,6 +490,7 @@ async function playCurrentSentence() {
         // Ensure event listener triggers for next play
         currentAudio.onended = () => {
             if (currentGen !== playGeneration) return; // Prevent old hooks from firing
+            URL.revokeObjectURL(url); // Clean memory buffer when finished
             
             if (AppState.isPlaying) {
                 if (AppState.progress < AppState.sentences.length - 1) {

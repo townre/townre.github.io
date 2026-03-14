@@ -112,6 +112,17 @@ body {
     transform: translateY(-2px);
 }
 
+.btn-secondary {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+}
+
+.btn-secondary:hover {
+    background-color: var(--highlight);
+    border-color: var(--accent);
+}
+
 .icon-btn {
     display: inline-flex;
     align-items: center;
@@ -397,6 +408,15 @@ body {
     color: var(--text-secondary);
     text-align: center;
     margin-top: 8px;
+}
+
+.settings-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--glass-border);
 }
 
 /* Toasts */

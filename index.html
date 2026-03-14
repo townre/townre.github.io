@@ -97,7 +97,12 @@
                     <label for="azure-region">Region</label>
                     <input type="text" id="azure-region" placeholder="e.g. eastus" autocomplete="off">
                 </div>
-                <button id="save-settings" class="btn btn-primary full-width">Save Settings</button>
+                <div class="settings-actions">
+                    <button id="clear-cache-btn" class="btn btn-secondary full-width">
+                        <i class="ph ph-trash"></i> Clear Audio Cache (<span id="cache-size">0</span> items)
+                    </button>
+                    <button id="save-settings" class="btn btn-primary full-width">Save Settings</button>
+                </div>
                 <p class="settings-hint">You need an active Azure Cognitive Services speech resource to use TTS.</p>
             </div>
         </div>
