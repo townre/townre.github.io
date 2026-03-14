@@ -323,7 +323,7 @@ function renderSentences() {
     });
 
     if (AppState.sentences.length > 0) {
-        setTimeout(focusActiveSentence, 100); // Wait for DOM render
+        setTimeout(syncViewToSentence, 100); // Wait for DOM render
     }
 }
 
