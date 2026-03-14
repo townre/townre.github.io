@@ -407,7 +407,7 @@ function parseAndRenderText(rawText, isRestore = false) {
     renderSentences();
 
     if (isRestore) {
-        DOM.fileName.textContent = "Restored from session";
+        DOM.fileName.textContent = AppState.currentFileName || "Restored from session";
     }
 
     // After render, navigate to the viewport pointer only if it was explicitly saved
