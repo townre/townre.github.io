@@ -5,6 +5,7 @@ const AppState = {
     speed: localStorage.getItem('tts_speed') || '1',
     maxChars: parseInt(localStorage.getItem('tts_maxChars')) || 200,
     theme: localStorage.getItem('tts_theme') || 'dark',
+    pageMode: localStorage.getItem('tts_pageMode') === 'true',
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
     sentences: [],
     paragraphData: [],
@@ -14,11 +15,15 @@ const AppState = {
 const DOM = {
     // Header
     themeToggle: document.getElementById('theme-toggle'),
+    modeToggle: document.getElementById('mode-toggle'),
     fileUpload: document.getElementById('file-upload'),
     fileName: document.getElementById('file-name'),
     settingsBtn: document.getElementById('settings-btn'),
     // Main
     textContainer: document.getElementById('text-container'),
+    appMain: document.querySelector('.app-main'),
+    pageZoneLeft: document.getElementById('page-zone-left'),
+    pageZoneRight: document.getElementById('page-zone-right'),
     // Modals & Toasts
     settingsModal: document.getElementById('settings-modal'),
     closeSettings: document.getElementById('close-settings'),
@@ -40,6 +45,7 @@ const DOM = {
 
 async function init() {
     applyTheme(AppState.theme);
+    applyPageMode(AppState.pageMode);
     await initDB();
     setupEventListeners();
     populateSettingsModal();
@@ -63,8 +69,17 @@ function setupEventListeners() {
         localStorage.setItem('tts_theme', AppState.theme);
         applyTheme(AppState.theme);
     });
+    
+    // Mode Toggle
+    DOM.modeToggle.addEventListener('click', () => {
+        AppState.pageMode = !AppState.pageMode;
+        localStorage.setItem('tts_pageMode', AppState.pageMode);
+        applyPageMode(AppState.pageMode);
+    });
 
     // File Upload
+    DOM.modeToggle.addEventListener('click', () => { AppState.pageMode = !AppState.pageMode; localStorage.setItem('tts_pageMode', AppState.pageMode); applyPageMode(AppState.pageMode); });
+
     DOM.fileUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -126,7 +141,21 @@ function setupEventListeners() {
     DOM.btnPlayPause.addEventListener('click', togglePlayPause);
     DOM.btnPrev.addEventListener('click', () => jumpSentence(-1));
     DOM.btnNext.addEventListener('click', () => jumpSentence(1));
-    DOM.btnFocus.addEventListener('click', focusActiveSentence);
+    DOM.btnFocus.addEventListener('click', syncViewToSentence);
+    
+    // Page Turning Zones
+    DOM.pageZoneLeft.addEventListener('click', () => turnPage(-1));
+    DOM.pageZoneRight.addEventListener('click', () => turnPage(1));
+    
+    // Global Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (DOM.settingsModal.classList.contains('hidden') === false) return;
+        
+        if (AppState.pageMode) {
+            if (e.key === 'ArrowRight') turnPage(1);
+            if (e.key === 'ArrowLeft') turnPage(-1);
+        }
+    });
     
     // Speed Selector
     DOM.speedSelect.value = AppState.speed;
@@ -141,6 +170,25 @@ function applyTheme(theme) {
     // Update Phospor icon
     const icon = DOM.themeToggle.querySelector('i');
     icon.className = theme === 'dark' ? 'ph ph-sun' : 'ph ph-moon';
+}
+
+function applyPageMode(isPageMode) {
+    if (isPageMode) {
+        document.body.classList.add('page-mode-active');
+        DOM.modeToggle.querySelector('i').classList.replace('ph-book-open', 'ph-scroll');
+        DOM.modeToggle.title = "Switch to Scroll Mode";
+        DOM.pageZoneLeft.classList.remove('hidden');
+        DOM.pageZoneRight.classList.remove('hidden');
+    } else {
+        document.body.classList.remove('page-mode-active');
+        DOM.modeToggle.querySelector('i').classList.replace('ph-scroll', 'ph-book-open');
+        DOM.modeToggle.title = "Switch to Page Mode";
+        DOM.pageZoneLeft.classList.add('hidden');
+        DOM.pageZoneRight.classList.add('hidden');
+    }
+    
+    // Ensure we are snapping to the right place after reflow
+    setTimeout(() => syncViewToSentence(), 50);
 }
 
 function showToast(message) {
@@ -282,7 +330,7 @@ function renderSentences() {
 function selectSentence(index) {
     if (index < 0 || index >= AppState.sentences.length) return;
     
-    // Removing old active
+// Removing old active
     const oldActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (oldActive) oldActive.classList.remove('active');
     
@@ -293,6 +341,8 @@ function selectSentence(index) {
     const newActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (newActive) newActive.classList.add('active');
     
+    syncViewToSentence();
+    
     if (AppState.isPlaying) {
         playCurrentSentence();
     }
@@ -302,9 +352,32 @@ function jumpSentence(offset) {
     selectSentence(AppState.progress + offset);
 }
 
-function focusActiveSentence() {
+function turnPage(direction) {
+    if (!AppState.pageMode) return;
+    const scrollAmount = window.innerWidth;
+    DOM.appMain.scrollBy({ left: scrollAmount * direction, behavior: 'smooth' });
+}
+
+function syncViewToSentence() {
     const active = DOM.textContainer.querySelector('.sentence.active');
-    if (active) {
+    if (!active) return;
+    
+    if (AppState.pageMode) {
+        // In Page Mode, find the left offset of the sentence and quantize it to the nearest VW page
+        const rect = active.getBoundingClientRect();
+        const mainRect = DOM.appMain.getBoundingClientRect();
+        
+        // Calculate the absolute left position of the sentence relative to the scrolling container's total width
+        // Then snap it to the nearest page boundary
+        const rawLeft = active.offsetLeft; 
+        const pageBoundary = Math.floor(rawLeft / window.innerWidth) * window.innerWidth;
+        
+        DOM.appMain.scrollTo({
+            left: pageBoundary,
+            behavior: 'smooth'
+        });
+    } else {
+        // Vanilla Scroll Mode
         active.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
