@@ -483,7 +483,8 @@ function buildPages() {
     const availableH = window.innerHeight
         - (header?.offsetHeight || 64)
         - (controller?.offsetHeight || 80)
-        - 80; // top + bottom padding of app-main
+        - 80 // top + bottom padding of app-main
+        - 40; // reserved space for .page-indicator
 
     // Probe div matching text-container layout exactly
     const probe = document.createElement('div');

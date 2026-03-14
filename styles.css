@@ -459,8 +459,12 @@ body {
 }
 
 /* Page Mode Overrides */
+body.page-mode-active {
+    overflow: hidden;
+}
+
 body.page-mode-active .app-main {
-    overflow-y: auto;
+    overflow-y: hidden;
     overflow-x: hidden;
 }
 
