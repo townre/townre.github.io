@@ -33,6 +33,9 @@
             <span id="file-name" class="file-name">No file loaded</span>
         </div>
         <div class="header-right">
+            <button id="toc-toggle" class="icon-btn" title="Table of Contents">
+                <i class="ph ph-list"></i>
+            </button>
             <button id="mode-toggle" class="icon-btn" title="Toggle Page Mode">
                 <i class="ph ph-book-open"></i>
             </button>
@@ -57,6 +60,17 @@
             </div>
         </div>
     </main>
+
+    <!-- Table of Contents Slide-in Panel -->
+    <aside id="toc-panel" class="toc-panel glass">
+        <div class="toc-header">
+            <h2>Table of Contents</h2>
+            <button id="close-toc" class="icon-btn"><i class="ph ph-x"></i></button>
+        </div>
+        <div id="toc-list" class="toc-list">
+            <div class="toc-empty">No chapters detected</div>
+        </div>
+    </aside>
 
     <div class="bottom-controller glass">
         <div class="controller-inner">

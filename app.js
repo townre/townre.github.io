@@ -10,6 +10,7 @@ const AppState = {
     currentFileName: localStorage.getItem('tts_current_filename') || '',
     sentences: [],
     paragraphData: [],
+    chapters: [],     // array of { title, sentenceIndex }
     pages: [],        // array of arrays of sentence indices per page (page mode)
     currentPage: 0,   // which page is displayed in page mode
     isPlaying: false
@@ -44,6 +45,7 @@ const DOM = {
     // Header
     themeToggle: document.getElementById('theme-toggle'),
     modeToggle: document.getElementById('mode-toggle'),
+    tocToggle: document.getElementById('toc-toggle'),
     fileUpload: document.getElementById('file-upload'),
     fileName: document.getElementById('file-name'),
     settingsBtn: document.getElementById('settings-btn'),
@@ -62,6 +64,10 @@ const DOM = {
     azureKey: document.getElementById('azure-key'),
     azureRegion: document.getElementById('azure-region'),
     toastContainer: document.getElementById('toast-container'),
+    // ToC Panel
+    tocPanel: document.getElementById('toc-panel'),
+    closeToc: document.getElementById('close-toc'),
+    tocList: document.getElementById('toc-list'),
     // Controller
     btnPrev: document.getElementById('btn-prev'),
     btnNext: document.getElementById('btn-next'),
@@ -111,6 +117,17 @@ function setupEventListeners() {
         AppState.pageMode = !AppState.pageMode;
         localStorage.setItem('tts_pageMode', AppState.pageMode);
         applyPageMode(AppState.pageMode);
+    });
+
+    // ToC Toggle
+    DOM.tocToggle.addEventListener('click', () => {
+        DOM.tocPanel.classList.toggle('open');
+        if (DOM.tocPanel.classList.contains('open')) {
+            syncTocActiveItem();
+        }
+    });
+    DOM.closeToc.addEventListener('click', () => {
+        DOM.tocPanel.classList.remove('open');
     });
 
     // File Upload
@@ -299,20 +316,38 @@ async function updateCacheSizeUI() {
         DOM.cacheSizeSpan.textContent = size;
     }
 }
-
-// Basic Text parsing into sentences using Regex (Fallback if Intl.Segmenter is complex, but let's try a simple approach)
+// Basic Text parsing into sentences using Regex and simple heuristics for Chapters
 function parseAndRenderText(rawText, isRestore = false) {
     // Split by any sequence of newlines to identify paragraphs
     const paragraphs = rawText.split(/[\r\n]+/);
-
+    
     AppState.sentences = [];
     AppState.paragraphData = [];
-
+    AppState.chapters = [];
+    
     // Simple sentence splitting by common punctuation.
     const splitRegex = /([.?!]+[\s]+)/g;
+    
+    // Chapter detection heuristics
+    // English: "Chapter 1", "Part 1", "Prologue", "Epilogue" (case insensitive at start of line)
+    // Chinese: "第一章", "第1回", "第十二节", "序" etc.
+    // The line should be relatively short (e.g. < 50 chars) to avoid false positives.
+    const chapterRegex = /^(?:chapter\s+\d+|part\s+\d+|prologue|epilogue|第[零一二三四五六七八九十百千万\d]+[章回节卷]|序章?)/i;
+    
+    let globalSentenceIndex = 0;
 
     paragraphs.forEach((paragraphText) => {
-        if (!paragraphText.trim()) return;
+        let trimmedPara = paragraphText.trim();
+        if (!trimmedPara) return;
+        
+        // Check if this paragraph is a chapter heading
+        if (trimmedPara.length < 50 && chapterRegex.test(trimmedPara)) {
+            AppState.chapters.push({
+                title: trimmedPara,
+                sentenceIndex: globalSentenceIndex
+            });
+        }
+
         // Also replace single newlines inside paragraphs with spaces
         const textToParse = paragraphText.replace(/\n/g, ' ');
         const tokens = textToParse.split(splitRegex);
@@ -343,29 +378,32 @@ function parseAndRenderText(rawText, isRestore = false) {
                     groupedSentenceCount++;
                 } else {
                     AppState.sentences.push(groupedText);
+                    globalSentenceIndex++;
                     sentenceCount++;
                     groupedText = trimmed;
                     groupedSentenceCount = 1;
                 }
             }
         }
-
+        
         if (groupedText.trim()) {
             AppState.sentences.push(groupedText);
+            globalSentenceIndex++;
             sentenceCount++;
         }
-
+        
         if (sentenceCount > 0) {
             AppState.paragraphData.push(sentenceCount);
         }
     });
+
+    buildTocUI();
 
     // Build pages FIRST so renderSentences has correct page data for the new file
     if (!isRestore) {
         AppState.currentPage = 0; // Don't carry over the old file's page position
     }
     buildPages();
-    renderSentences();
 
     if (isRestore) {
         DOM.fileName.textContent = "Restored from session";
@@ -377,6 +415,55 @@ function parseAndRenderText(rawText, isRestore = false) {
     }
     AppState._restoreViewport = undefined;
 }
+
+function buildTocUI() {
+    DOM.tocList.innerHTML = '';
+    
+    if (AppState.chapters.length === 0) {
+        DOM.tocList.innerHTML = '<div class="toc-empty">No chapters detected</div>';
+        DOM.tocToggle.classList.add('hidden'); // Optional: hide toggle if no toc
+        return;
+    }
+    DOM.tocToggle.classList.remove('hidden');
+    
+    AppState.chapters.forEach((chapter, i) => {
+        const div = document.createElement('div');
+        div.className = 'toc-item';
+        div.textContent = chapter.title;
+        div.dataset.index = chapter.sentenceIndex;
+        div.addEventListener('click', () => {
+            selectSentence(chapter.sentenceIndex);
+            if (window.innerWidth <= 768) {
+                DOM.tocPanel.classList.remove('open');
+            }
+        });
+        DOM.tocList.appendChild(div);
+    });
+}
+
+function syncTocActiveItem() {
+    // Find the current chapter based on progress
+    let activeChapterIdx = -1;
+    for (let i = 0; i < AppState.chapters.length; i++) {
+        if (AppState.progress >= AppState.chapters[i].sentenceIndex) {
+            activeChapterIdx = i;
+        } else {
+            break;
+        }
+    }
+    
+    const items = DOM.tocList.querySelectorAll('.toc-item');
+    items.forEach((item, i) => {
+        if (i === activeChapterIdx) {
+            item.classList.add('active');
+            // Scroll into view within ToC panel
+            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
 function buildPages() {
     AppState.pages = [];
     if (AppState.sentences.length === 0) return;
@@ -529,10 +616,10 @@ function selectSentence(index) {
     if (AppState.currentFileName) {
         saveReadingProgress(AppState.currentFileName, index);
     }
-
+    
     const newActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (newActive) newActive.classList.add('active');
-
+    
     // In page mode, flip to the page containing the new sentence (no auto-scroll in scroll mode)
     if (AppState.pageMode) {
         const targetPage = findPageForSentence(index);
@@ -542,7 +629,10 @@ function selectSentence(index) {
             DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
         }
     }
-
+    
+    // Sync ToC if open
+    syncTocActiveItem();
+    
     if (AppState.isPlaying) {
         playCurrentSentence();
     }
