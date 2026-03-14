@@ -320,26 +320,26 @@ async function updateCacheSizeUI() {
 function parseAndRenderText(rawText, isRestore = false) {
     // Split by any sequence of newlines to identify paragraphs
     const paragraphs = rawText.split(/[\r\n]+/);
-    
+
     AppState.sentences = [];
     AppState.paragraphData = [];
     AppState.chapters = [];
-    
+
     // Simple sentence splitting by common punctuation.
     const splitRegex = /([.?!]+[\s]+)/g;
-    
+
     // Chapter detection heuristics
     // English: "Chapter 1", "Part 1", "Prologue", "Epilogue" (case insensitive at start of line)
     // Chinese: "第一章", "第1回", "第十二节", "序" etc.
     // The line should be relatively short (e.g. < 50 chars) to avoid false positives.
     const chapterRegex = /^(?:chapter\s+\d+|part\s+\d+|prologue|epilogue|第[零一二三四五六七八九十百千万\d]+[章回节卷]|序章?)/i;
-    
+
     let globalSentenceIndex = 0;
 
     paragraphs.forEach((paragraphText) => {
         let trimmedPara = paragraphText.trim();
         if (!trimmedPara) return;
-        
+
         // Check if this paragraph is a chapter heading
         if (trimmedPara.length < 50 && chapterRegex.test(trimmedPara)) {
             AppState.chapters.push({
@@ -385,13 +385,13 @@ function parseAndRenderText(rawText, isRestore = false) {
                 }
             }
         }
-        
+
         if (groupedText.trim()) {
             AppState.sentences.push(groupedText);
             globalSentenceIndex++;
             sentenceCount++;
         }
-        
+
         if (sentenceCount > 0) {
             AppState.paragraphData.push(sentenceCount);
         }
@@ -418,14 +418,14 @@ function parseAndRenderText(rawText, isRestore = false) {
 
 function buildTocUI() {
     DOM.tocList.innerHTML = '';
-    
+
     if (AppState.chapters.length === 0) {
         DOM.tocList.innerHTML = '<div class="toc-empty">No chapters detected</div>';
         DOM.tocToggle.classList.add('hidden'); // Optional: hide toggle if no toc
         return;
     }
     DOM.tocToggle.classList.remove('hidden');
-    
+
     AppState.chapters.forEach((chapter, i) => {
         const div = document.createElement('div');
         div.className = 'toc-item';
@@ -451,7 +451,7 @@ function syncTocActiveItem() {
             break;
         }
     }
-    
+
     const items = DOM.tocList.querySelectorAll('.toc-item');
     items.forEach((item, i) => {
         if (i === activeChapterIdx) {
@@ -616,10 +616,10 @@ function selectSentence(index) {
     if (AppState.currentFileName) {
         saveReadingProgress(AppState.currentFileName, index);
     }
-    
+
     const newActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (newActive) newActive.classList.add('active');
-    
+
     // In page mode, flip to the page containing the new sentence (no auto-scroll in scroll mode)
     if (AppState.pageMode) {
         const targetPage = findPageForSentence(index);
@@ -629,10 +629,10 @@ function selectSentence(index) {
             DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
         }
     }
-    
+
     // Sync ToC if open
     syncTocActiveItem();
-    
+
     if (AppState.isPlaying) {
         playCurrentSentence();
     }
