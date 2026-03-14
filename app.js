@@ -1,9 +1,8 @@
-// app.js - Main Application Logic
-
 const AppState = {
     apiKey: localStorage.getItem('tts_apiKey') || '',
     region: localStorage.getItem('tts_region') || '',
     voice: localStorage.getItem('tts_voice') || '',
+    speed: localStorage.getItem('tts_speed') || '1',
     theme: localStorage.getItem('tts_theme') || 'dark',
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
     sentences: [],
@@ -31,7 +30,8 @@ const DOM = {
     btnNext: document.getElementById('btn-next'),
     btnPlayPause: document.getElementById('btn-play-pause'),
     btnFocus: document.getElementById('btn-focus'),
-    voiceSelect: document.getElementById('voice-select')
+    voiceSelect: document.getElementById('voice-select'),
+    speedSelect: document.getElementById('speed-select')
 };
 
 function init() {
@@ -104,6 +104,13 @@ function setupEventListeners() {
     DOM.btnPrev.addEventListener('click', () => jumpSentence(-1));
     DOM.btnNext.addEventListener('click', () => jumpSentence(1));
     DOM.btnFocus.addEventListener('click', focusActiveSentence);
+    
+    // Speed Selector
+    DOM.speedSelect.value = AppState.speed;
+    DOM.speedSelect.addEventListener('change', (e) => {
+        AppState.speed = e.target.value;
+        localStorage.setItem('tts_speed', AppState.speed);
+    });
 }
 
 function applyTheme(theme) {
@@ -333,7 +340,9 @@ async function playCurrentSentence() {
         const ssml = `
             <speak version='1.0' xml:lang='en-US'>
                 <voice xml:lang='en-US' xml:gender='Neural' name='${AppState.voice}'>
-                    ${escapeXml(textToRead)}
+                    <prosody rate='${AppState.speed}'>
+                        ${escapeXml(textToRead)}
+                    </prosody>
                 </voice>
             </speak>`;
 

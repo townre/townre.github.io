@@ -256,7 +256,7 @@ body {
     gap: 16px;
 }
 
-.voice-selector {
+.select-group {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -266,11 +266,11 @@ body {
     border: 1px solid var(--glass-border);
 }
 
-.voice-selector i {
+.select-group i {
     color: var(--text-secondary);
 }
 
-.voice-selector select {
+.select-group select {
     background: var(--bg-surface);
     border: none;
     color: var(--text-primary);
@@ -283,7 +283,7 @@ body {
     border-radius: 4px;
 }
 
-.voice-selector select option {
+.select-group select option {
     background: var(--bg-surface);
     color: var(--text-primary);
 }
@@ -418,7 +418,7 @@ body {
         width: calc(100% - 32px);
         padding: 0 16px;
     }
-    .voice-selector select {
+    .select-group select {
         max-width: 100px;
     }
     .app-header h1 {
