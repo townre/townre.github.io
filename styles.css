@@ -470,6 +470,22 @@ body.page-mode-active .app-main {
     letter-spacing: 0.05em;
 }
 
+/* Page turn tap zones */
+.page-zone {
+    position: fixed;
+    top: var(--header-height);
+    bottom: calc(var(--controller-height) + 32px);
+    width: 20vw;
+    z-index: 10;
+    cursor: pointer;
+}
+.page-zone.left  { left: 0; }
+.page-zone.right { right: 0; }
+.page-zone:hover {
+    background-color: var(--highlight);
+    opacity: 0.08;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .bottom-controller {
