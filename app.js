@@ -293,8 +293,6 @@ function selectSentence(index) {
     const newActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (newActive) newActive.classList.add('active');
     
-    focusActiveSentence();
-    
     if (AppState.isPlaying) {
         playCurrentSentence();
     }
