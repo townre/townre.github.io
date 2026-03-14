@@ -788,8 +788,9 @@ async function playCurrentSentence() {
         return;
     }
 
-    // Background preload the next sentence
+    // Background preload the next two sentences
     preloadSentence(AppState.progress + 1);
+    preloadSentence(AppState.progress + 2);
 
     try {
         const ssml = `
