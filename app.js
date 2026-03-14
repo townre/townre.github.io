@@ -22,20 +22,20 @@ function getFileProgressMap() {
 }
 function getFileProgress(filename) {
     const entry = getFileProgressMap()[filename];
-    if (!entry) return { reading: 0, viewport: 0 };
+    if (!entry) return { reading: 0, viewport: null };
     // Backward compat: old format was just a number
-    if (typeof entry === 'number') return { reading: entry, viewport: entry };
-    return { reading: entry.reading ?? 0, viewport: entry.viewport ?? 0 };
+    if (typeof entry === 'number') return { reading: entry, viewport: null };
+    return { reading: entry.reading ?? 0, viewport: entry.viewport ?? null };
 }
 function saveReadingProgress(filename, index) {
     const map = getFileProgressMap();
-    const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: 0 };
+    const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: null };
     map[filename] = { ...entry, reading: index };
     try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch {}
 }
 function saveViewportProgress(filename, index) {
     const map = getFileProgressMap();
-    const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: 0 };
+    const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: null };
     map[filename] = { ...entry, viewport: index };
     try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch {}
 }
@@ -240,9 +240,6 @@ function applyPageMode(isPageMode) {
     // Re-render content for the new mode (shows all sentences in scroll mode, or current page in page mode)
     if (AppState.sentences.length > 0) {
         renderSentences();
-    } else {
-        // Ensure we are snapping to the right place after reflow
-        setTimeout(() => syncViewToSentence(), 50);
     }
 }
 
@@ -344,11 +341,11 @@ function parseAndRenderText(rawText, isRestore = false) {
         DOM.fileName.textContent = "Restored from session";
     }
 
-    // After render, scroll to the viewport pointer if one was set
-    if (AppState._restoreViewport !== undefined) {
+    // After render, navigate to the viewport pointer only if it was explicitly saved
+    if (AppState._restoreViewport != null) {
         restoreViewport(AppState._restoreViewport);
-        AppState._restoreViewport = undefined;
     }
+    AppState._restoreViewport = undefined;
 }
 
 // Build discrete pages for Page Mode by grouping sentences until a char threshold is hit

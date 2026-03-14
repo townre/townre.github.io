@@ -481,6 +481,7 @@ body.page-mode-active .app-main {
 }
 .page-zone.left  { left: 0; }
 .page-zone.right { right: 0; }
+.page-zone.hidden { display: none; }
 .page-zone:hover {
     background-color: var(--highlight);
     opacity: 0.08;
