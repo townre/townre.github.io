@@ -97,6 +97,10 @@
                     <label for="azure-region">Region</label>
                     <input type="text" id="azure-region" placeholder="e.g. eastus" autocomplete="off">
                 </div>
+                <div class="form-group">
+                    <label for="max-chars">Max Characters per Audio Chunk (e.g. 200)</label>
+                    <input type="number" id="max-chars" min="50" max="1000" step="10" autocomplete="off">
+                </div>
                 <div class="settings-actions">
                     <button id="clear-cache-btn" class="btn btn-secondary full-width">
                         <i class="ph ph-trash"></i> Clear Audio Cache (<span id="cache-size">0</span> items)

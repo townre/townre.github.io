@@ -3,6 +3,7 @@ const AppState = {
     region: localStorage.getItem('tts_region') || '',
     voice: localStorage.getItem('tts_voice') || '',
     speed: localStorage.getItem('tts_speed') || '1',
+    maxChars: parseInt(localStorage.getItem('tts_maxChars')) || 200,
     theme: localStorage.getItem('tts_theme') || 'dark',
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
     sentences: [],
@@ -24,6 +25,7 @@ const DOM = {
     saveSettings: document.getElementById('save-settings'),
     clearCacheBtn: document.getElementById('clear-cache-btn'),
     cacheSizeSpan: document.getElementById('cache-size'),
+    maxChars: document.getElementById('max-chars'),
     azureKey: document.getElementById('azure-key'),
     azureRegion: document.getElementById('azure-region'),
     toastContainer: document.getElementById('toast-container'),
@@ -93,13 +95,22 @@ function setupEventListeners() {
     DOM.saveSettings.addEventListener('click', () => {
         AppState.apiKey = DOM.azureKey.value.trim();
         AppState.region = DOM.azureRegion.value.trim();
+        AppState.maxChars = parseInt(DOM.maxChars.value) || 200;
+        
         localStorage.setItem('tts_apiKey', AppState.apiKey);
         localStorage.setItem('tts_region', AppState.region);
+        localStorage.setItem('tts_maxChars', AppState.maxChars);
         
         DOM.settingsModal.classList.add('hidden');
         showToast('Settings saved successfully');
         
         fetchVoices();
+        
+        // Reparse text with new chunk limits
+        const savedText = localStorage.getItem('tts_current_text');
+        if (savedText) {
+            parseAndRenderText(savedText, true);
+        }
     });
     
     // Clear Cache
@@ -148,6 +159,7 @@ function showToast(message) {
 function populateSettingsModal() {
     DOM.azureKey.value = AppState.apiKey;
     DOM.azureRegion.value = AppState.region;
+    DOM.maxChars.value = AppState.maxChars;
     updateCacheSizeUI();
 }
 
@@ -177,19 +189,39 @@ function parseAndRenderText(rawText, isRestore = false) {
         let currentSentence = "";
         let sentenceCount = 0;
         
-        // Reconstruct sentences with their punctuation
+        let groupedText = "";
+        let groupedSentenceCount = 0;
+        
+        // Reconstruct sentences with their punctuation and group them
         for (let i = 0; i < tokens.length; i++) {
-            if (tokens[i].match(splitRegex)) {
-                currentSentence += tokens[i];
-                AppState.sentences.push(currentSentence.trim());
-                sentenceCount++;
+            let token = tokens[i];
+            let isSentenceEnd = token.match(splitRegex);
+            currentSentence += token;
+            
+            if (isSentenceEnd || i === tokens.length - 1) {
+                let trimmed = currentSentence.trim();
                 currentSentence = "";
-            } else {
-                currentSentence += tokens[i];
+                
+                if (!trimmed) continue;
+                
+                if (groupedText.length === 0) {
+                    groupedText = trimmed;
+                    groupedSentenceCount = 1;
+                } else if (groupedSentenceCount < 2 && (groupedText.length + 1 + trimmed.length) <= AppState.maxChars) {
+                    // Combine into at most 2 sentences if under char limit
+                    groupedText += " " + trimmed;
+                    groupedSentenceCount++;
+                } else {
+                    AppState.sentences.push(groupedText);
+                    sentenceCount++;
+                    groupedText = trimmed;
+                    groupedSentenceCount = 1;
+                }
             }
         }
-        if (currentSentence.trim()) {
-            AppState.sentences.push(currentSentence.trim());
+        
+        if (groupedText.trim()) {
+            AppState.sentences.push(groupedText);
             sentenceCount++;
         }
         
@@ -451,6 +483,9 @@ async function playCurrentSentence() {
         return;
     }
 
+    // Background preload the next sentence
+    preloadSentence(AppState.progress + 1);
+
     try {
         const ssml = `
             <speak version='1.0' xml:lang='en-US'>
@@ -546,6 +581,47 @@ function togglePlayPause() {
         playCurrentSentence();
     } else {
         currentAudio.pause();
+    }
+}
+
+async function preloadSentence(index) {
+    if (index < 0 || index >= AppState.sentences.length) return;
+    const textToRead = AppState.sentences[index];
+    if (!textToRead || !/\p{L}|\p{N}/u.test(textToRead)) return;
+    
+    // Check if already in persistent Cache
+    const cacheKey = `${AppState.voice}_${AppState.speed}_${textToRead}`;
+    const cachedBlob = await getAudioFromCache(cacheKey);
+    if (cachedBlob) return; 
+
+    // Fetch and cache silently in background
+    try {
+        const ssml = `
+            <speak version='1.0' xml:lang='en-US'>
+                <voice xml:lang='en-US' xml:gender='Neural' name='${AppState.voice}'>
+                    <prosody rate='${AppState.speed}'>
+                        ${escapeXml(textToRead)}
+                    </prosody>
+                </voice>
+            </speak>`;
+
+        const response = await fetch(`https://${AppState.region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+            method: 'POST',
+            headers: {
+                'Ocp-Apim-Subscription-Key': AppState.apiKey,
+                'Content-Type': 'application/ssml+xml',
+                'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
+                'User-Agent': 'TXT_TTS_Reader_Preloader'
+            },
+            body: ssml
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            saveAudioToCache(cacheKey, blob);
+        }
+    } catch (e) {
+        console.warn("Preload failed", e);
     }
 }
 
