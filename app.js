@@ -315,6 +315,18 @@ async function playCurrentSentence() {
     const textToRead = AppState.sentences[AppState.progress];
     if (!textToRead) return;
 
+    // Skip sentences that contain no letters or numbers (like "......" or "    ")
+    // \p{L} matches any kind of letter from any language. \p{N} matches any kind of numeric character in any script.
+    if (!/\p{L}|\p{N}/u.test(textToRead)) {
+        if (AppState.progress < AppState.sentences.length - 1) {
+            setTimeout(() => jumpSentence(1), 50); // Visual delay before skipping
+        } else {
+            AppState.isPlaying = false;
+            updatePlayBtnUI();
+        }
+        return;
+    }
+
     updatePlayBtnUI(); // Ensure UI reflects loading/playing state immediately
 
     try {
