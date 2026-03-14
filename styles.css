@@ -455,52 +455,19 @@ body {
 }
 
 /* Page Mode Overrides */
-body.page-mode-active {
-    overflow: hidden; /* Prevent all native scrolling */
-}
-
 body.page-mode-active .app-main {
-    overflow-y: hidden;
-    overflow-x: hidden; /* JS scrolling exclusively for snapping */
-    padding: 0;    /* Remove all padding to guarantee exact view bounds */
-    display: block; /* override flex */
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
-body.page-mode-active #text-container {
-    max-width: none;
-    height: calc(100vh - var(--header-height) - var(--controller-height) - 40px);
-    column-width: 100vw;
-    column-gap: 0;
-    column-fill: auto;
-    padding: 24px 40px;
-    box-sizing: border-box;
-    /* Typography adjustments to prevent bad breaks across columns */
-    orphans: 2;
-    widows: 2;
-}
-
-body.page-mode-active .paragraph {
-    margin-bottom: 24px;
-    break-inside: avoid; /* try not to split paragraphs across pages */
-}
-
-/* Page Navigation Overlays */
-.page-zone {
-    position: fixed;
-    top: var(--header-height);
-    bottom: 80px; /* above controller */
-    width: 25vw;
-    z-index: 10;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.page-zone.left { left: 0; }
-.page-zone.right { right: 0; }
-
-.page-zone:hover {
-    background-color: var(--highlight);
-    opacity: 0.1; /* Very subtle hit zone indicator */
+.page-indicator {
+    text-align: center;
+    padding: 16px 0 0;
+    color: var(--text-secondary);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
 }
 
 /* Responsive */

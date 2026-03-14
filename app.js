@@ -9,6 +9,8 @@ const AppState = {
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
     sentences: [],
     paragraphData: [],
+    pages: [],        // array of arrays of sentence indices per page (page mode)
+    currentPage: 0,   // which page is displayed in page mode
     isPlaying: false
 };
 
@@ -281,6 +283,36 @@ function parseAndRenderText(rawText, isRestore = false) {
     if (isRestore) {
         DOM.fileName.textContent = "Restored from session";
     }
+    
+    buildPages();
+}
+
+// Build discrete pages for Page Mode by grouping sentences until a char threshold is hit
+const CHARS_PER_PAGE = 1200;
+function buildPages() {
+    AppState.pages = [];
+    let page = [];
+    let charCount = 0;
+    AppState.sentences.forEach((text, idx) => {
+        if (charCount + text.length > CHARS_PER_PAGE && page.length > 0) {
+            AppState.pages.push(page);
+            page = [];
+            charCount = 0;
+        }
+        page.push(idx);
+        charCount += text.length;
+    });
+    if (page.length > 0) AppState.pages.push(page);
+    
+    // Reset current page to the one that contains `progress`
+    AppState.currentPage = findPageForSentence(AppState.progress);
+}
+
+function findPageForSentence(sentenceIndex) {
+    for (let p = 0; p < AppState.pages.length; p++) {
+        if (AppState.pages[p].includes(sentenceIndex)) return p;
+    }
+    return 0;
 }
 
 function renderSentences() {
@@ -295,34 +327,60 @@ function renderSentences() {
         return;
     }
 
+    // Determine which sentence indices to show
+    const visibleIndices = AppState.pageMode
+        ? new Set(AppState.pages[AppState.currentPage] || [])
+        : null; // null = show all
+
     let globalSentenceIndex = 0;
 
     AppState.paragraphData.forEach((sentenceCount) => {
         const p = document.createElement('p');
         p.className = 'paragraph';
+        let hasVisible = false;
         
         for (let i = 0; i < sentenceCount; i++) {
             const index = globalSentenceIndex++;
-            const sentenceText = AppState.sentences[index];
             
+            // In page mode, skip sentences not on this page
+            if (visibleIndices && !visibleIndices.has(index)) continue;
+            hasVisible = true;
+
+            const sentenceText = AppState.sentences[index];
             const span = document.createElement('span');
             span.className = `sentence ${index === AppState.progress ? 'active' : ''}`;
             span.textContent = sentenceText + ' ';
             span.dataset.index = index;
-            
-            span.addEventListener('click', () => {
-                selectSentence(index);
-            });
-
+            span.addEventListener('click', () => selectSentence(index));
             p.appendChild(span);
         }
         
-        DOM.textContainer.appendChild(p);
+        if (!visibleIndices || hasVisible) {
+            DOM.textContainer.appendChild(p);
+        }
     });
+    
+    // Update page indicator if in page mode
+    if (AppState.pageMode) {
+        updatePageIndicator();
+    }
 
     if (AppState.sentences.length > 0) {
-        setTimeout(syncViewToSentence, 100); // Wait for DOM render
+        setTimeout(syncViewToSentence, 100);
     }
+}
+
+function updatePageIndicator() {
+    let indicator = document.getElementById('page-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'page-indicator';
+        indicator.className = 'page-indicator';
+        DOM.textContainer.appendChild(indicator);
+    } else {
+        DOM.textContainer.appendChild(indicator);
+    }
+    indicator.textContent = `${AppState.currentPage + 1} / ${AppState.pages.length}`;
 }
 
 function selectSentence(index) {
@@ -352,32 +410,30 @@ function jumpSentence(offset) {
 
 function turnPage(direction) {
     if (!AppState.pageMode) return;
-    const scrollAmount = window.innerWidth;
-    DOM.appMain.scrollBy({ left: scrollAmount * direction, behavior: 'auto' });
+    const newPage = AppState.currentPage + direction;
+    if (newPage < 0 || newPage >= AppState.pages.length) return;
+    AppState.currentPage = newPage;
+    renderSentences();
+    // Scroll to top of the new page
+    DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
 }
 
 function syncViewToSentence() {
-    const active = DOM.textContainer.querySelector('.sentence.active');
-    if (!active) return;
-    
-    if (AppState.pageMode) {
-        // In Page Mode, find the left offset of the sentence and quantize it to the nearest VW page
-        const rect = active.getBoundingClientRect();
-        const mainRect = DOM.appMain.getBoundingClientRect();
-        
-        // Calculate the absolute left position of the sentence relative to the scrolling container's total width
-        // Then snap it to the nearest page boundary
-        const rawLeft = active.offsetLeft; 
-        const pageBoundary = Math.floor(rawLeft / window.innerWidth) * window.innerWidth;
-        
-        DOM.appMain.scrollTo({
-            left: pageBoundary,
-            behavior: 'auto'
-        });
-    } else {
+    if (!AppState.pageMode) {
         // Vanilla Scroll Mode
-        active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const active = DOM.textContainer.querySelector('.sentence.active');
+        if (active) active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
     }
+    
+    // Page Mode: find which page contains the active sentence and switch to it
+    const targetPage = findPageForSentence(AppState.progress);
+    if (targetPage !== AppState.currentPage) {
+        AppState.currentPage = targetPage;
+        renderSentences();
+    }
+    // Scroll to top of page
+    DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
 }
 
 // IndexedDB Wrapper for Audio Cache
