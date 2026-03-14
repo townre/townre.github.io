@@ -31,13 +31,13 @@ function saveReadingProgress(filename, index) {
     const map = getFileProgressMap();
     const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: null };
     map[filename] = { ...entry, reading: index };
-    try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch {}
+    try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch { }
 }
 function saveViewportProgress(filename, index) {
     const map = getFileProgressMap();
     const entry = typeof map[filename] === 'object' ? map[filename] : { reading: 0, viewport: null };
     map[filename] = { ...entry, viewport: index };
-    try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch {}
+    try { localStorage.setItem('tts_fileProgress', JSON.stringify(map)); } catch { }
 }
 
 const DOM = {
@@ -77,7 +77,7 @@ async function init() {
     await initDB();
     setupEventListeners();
     populateSettingsModal();
-    
+
     // Check if we have previously loaded text in localStorage
     const savedText = localStorage.getItem('tts_current_text');
     if (savedText) {
@@ -105,7 +105,7 @@ function setupEventListeners() {
         localStorage.setItem('tts_theme', AppState.theme);
         applyTheme(AppState.theme);
     });
-    
+
     // Mode Toggle
     DOM.modeToggle.addEventListener('click', () => {
         AppState.pageMode = !AppState.pageMode;
@@ -150,23 +150,23 @@ function setupEventListeners() {
         AppState.apiKey = DOM.azureKey.value.trim();
         AppState.region = DOM.azureRegion.value.trim();
         AppState.maxChars = parseInt(DOM.maxChars.value) || 200;
-        
+
         localStorage.setItem('tts_apiKey', AppState.apiKey);
         localStorage.setItem('tts_region', AppState.region);
         localStorage.setItem('tts_maxChars', AppState.maxChars);
-        
+
         DOM.settingsModal.classList.add('hidden');
         showToast('Settings saved successfully');
-        
+
         fetchVoices();
-        
+
         // Reparse text with new chunk limits
         const savedText = localStorage.getItem('tts_current_text');
         if (savedText) {
             parseAndRenderText(savedText, true);
         }
     });
-    
+
     // Clear Cache
     DOM.clearCacheBtn.addEventListener('click', async () => {
         if (confirm('Are you sure you want to clear all downloaded audio?')) {
@@ -175,27 +175,27 @@ function setupEventListeners() {
             updateCacheSizeUI();
         }
     });
-    
+
     // Controller Event Placeholders
     DOM.btnPlayPause.addEventListener('click', togglePlayPause);
     DOM.btnPrev.addEventListener('click', () => jumpSentence(-1));
     DOM.btnNext.addEventListener('click', () => jumpSentence(1));
     DOM.btnFocus.addEventListener('click', syncViewToSentence);
-    
+
     // Page Turning Zones
     DOM.pageZoneLeft.addEventListener('click', () => turnPage(-1));
     DOM.pageZoneRight.addEventListener('click', () => turnPage(1));
-    
+
     // Global Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
         if (DOM.settingsModal.classList.contains('hidden') === false) return;
-        
+
         if (AppState.pageMode) {
             if (e.key === 'ArrowRight') turnPage(1);
             if (e.key === 'ArrowLeft') turnPage(-1);
         }
     });
-    
+
     // Speed Selector
     DOM.speedSelect.value = AppState.speed;
     DOM.speedSelect.addEventListener('change', (e) => {
@@ -213,6 +213,19 @@ function setupEventListeners() {
             if (idx !== -1) saveViewportProgress(AppState.currentFileName, idx);
         }, 300);
     }, { passive: true });
+
+    // Rebuild pages on resize so computeCharsPerPage() stays accurate
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (AppState.sentences.length === 0) return;
+            const vp = AppState.currentFileName ? getFileProgress(AppState.currentFileName).viewport : null;
+            buildPages();
+            renderSentences(true);
+            if (vp != null) restoreViewport(vp);
+        }, 250);
+    });
 }
 
 function applyTheme(theme) {
@@ -236,10 +249,27 @@ function applyPageMode(isPageMode) {
         DOM.pageZoneLeft.classList.add('hidden');
         DOM.pageZoneRight.classList.add('hidden');
     }
-    
+
+    // Capture current viewport sentence BEFORE switching modes so we can restore it after
+    let viewportToRestore = null;
+    if (AppState.sentences.length > 0) {
+        if (isPageMode) {
+            // Switching TO page mode: capture first visible sentence from scroll position
+            viewportToRestore = getFirstVisibleSentenceIndex();
+            if (viewportToRestore === -1) viewportToRestore = null;
+        } else {
+            // Switching TO scroll mode: use first sentence of current page
+            viewportToRestore = AppState.pages[AppState.currentPage]?.[0] ?? null;
+        }
+        if (viewportToRestore != null && AppState.currentFileName) {
+            saveViewportProgress(AppState.currentFileName, viewportToRestore);
+        }
+    }
+
     // Re-render content for the new mode (shows all sentences in scroll mode, or current page in page mode)
     if (AppState.sentences.length > 0) {
         renderSentences();
+        if (viewportToRestore != null) restoreViewport(viewportToRestore);
     }
 }
 
@@ -274,13 +304,13 @@ async function updateCacheSizeUI() {
 function parseAndRenderText(rawText, isRestore = false) {
     // Split by any sequence of newlines to identify paragraphs
     const paragraphs = rawText.split(/[\r\n]+/);
-    
+
     AppState.sentences = [];
     AppState.paragraphData = [];
-    
+
     // Simple sentence splitting by common punctuation.
     const splitRegex = /([.?!]+[\s]+)/g;
-    
+
     paragraphs.forEach((paragraphText) => {
         if (!paragraphText.trim()) return;
         // Also replace single newlines inside paragraphs with spaces
@@ -288,22 +318,22 @@ function parseAndRenderText(rawText, isRestore = false) {
         const tokens = textToParse.split(splitRegex);
         let currentSentence = "";
         let sentenceCount = 0;
-        
+
         let groupedText = "";
         let groupedSentenceCount = 0;
-        
+
         // Reconstruct sentences with their punctuation and group them
         for (let i = 0; i < tokens.length; i++) {
             let token = tokens[i];
             let isSentenceEnd = token.match(splitRegex);
             currentSentence += token;
-            
+
             if (isSentenceEnd || i === tokens.length - 1) {
                 let trimmed = currentSentence.trim();
                 currentSentence = "";
-                
+
                 if (!trimmed) continue;
-                
+
                 if (groupedText.length === 0) {
                     groupedText = trimmed;
                     groupedSentenceCount = 1;
@@ -319,12 +349,12 @@ function parseAndRenderText(rawText, isRestore = false) {
                 }
             }
         }
-        
+
         if (groupedText.trim()) {
             AppState.sentences.push(groupedText);
             sentenceCount++;
         }
-        
+
         if (sentenceCount > 0) {
             AppState.paragraphData.push(sentenceCount);
         }
@@ -336,7 +366,7 @@ function parseAndRenderText(rawText, isRestore = false) {
     }
     buildPages();
     renderSentences();
-    
+
     if (isRestore) {
         DOM.fileName.textContent = "Restored from session";
     }
@@ -347,24 +377,67 @@ function parseAndRenderText(rawText, isRestore = false) {
     }
     AppState._restoreViewport = undefined;
 }
-
-// Build discrete pages for Page Mode by grouping sentences until a char threshold is hit
-const CHARS_PER_PAGE = 1200;
 function buildPages() {
     AppState.pages = [];
+    if (AppState.sentences.length === 0) return;
+
+    const header = document.querySelector('.app-header');
+    const controller = document.querySelector('.bottom-controller');
+    const availableH = window.innerHeight
+        - (header?.offsetHeight || 64)
+        - (controller?.offsetHeight || 80)
+        - 80; // top + bottom padding of app-main
+
+    // Probe div matching text-container layout exactly
+    const probe = document.createElement('div');
+    probe.style.cssText = [
+        'position:absolute', 'top:-9999px', 'left:0',
+        `width:${DOM.textContainer.offsetWidth || 752}px`,
+        'font-family:"Lora",Georgia,serif',
+        'font-size:20px', 'line-height:1.8',
+        'visibility:hidden', 'pointer-events:none'
+    ].join(';');
+    document.body.appendChild(probe);
+
+    // Know which sentence indices start a new paragraph
+    const paragraphStarts = new Set();
+    let s = 0;
+    AppState.paragraphData.forEach(n => { paragraphStarts.add(s); s += n; });
+
     let page = [];
-    let charCount = 0;
-    AppState.sentences.forEach((text, idx) => {
-        if (charCount + text.length > CHARS_PER_PAGE && page.length > 0) {
-            AppState.pages.push(page);
-            page = [];
-            charCount = 0;
+    let probeP = null;
+
+    for (let idx = 0; idx < AppState.sentences.length; idx++) {
+        // New paragraph boundary → start a new <p> in probe
+        if (paragraphStarts.has(idx) || probeP === null) {
+            probeP = document.createElement('p');
+            probeP.style.marginBottom = '1.5em';
+            probe.appendChild(probeP);
         }
-        page.push(idx);
-        charCount += text.length;
-    });
+
+        const span = document.createElement('span');
+        span.textContent = AppState.sentences[idx] + ' ';
+        probeP.appendChild(span);
+
+        if (probe.offsetHeight > availableH && page.length > 0) {
+            // This sentence overflowed → end current page, start next
+            probeP.removeChild(span);
+            AppState.pages.push([...page]);
+            page = [idx];
+            // Reset probe: new page starts with this sentence
+            probe.innerHTML = '';
+            probeP = document.createElement('p');
+            probeP.style.marginBottom = '1.5em';
+            probeP.appendChild(span);
+            probe.appendChild(probeP);
+        } else {
+            page.push(idx);
+        }
+    }
+
     if (page.length > 0) AppState.pages.push(page);
-    
+    document.body.removeChild(probe);
+
     // Reset current page to the one that contains `progress`
     AppState.currentPage = findPageForSentence(AppState.progress);
 }
@@ -378,7 +451,7 @@ function findPageForSentence(sentenceIndex) {
 
 function renderSentences(skipSync = false) {
     DOM.textContainer.innerHTML = '';
-    
+
     if (AppState.sentences.length === 0) {
         DOM.textContainer.innerHTML = `
             <div class="empty-state">
@@ -399,10 +472,10 @@ function renderSentences(skipSync = false) {
         const p = document.createElement('p');
         p.className = 'paragraph';
         let hasVisible = false;
-        
+
         for (let i = 0; i < sentenceCount; i++) {
             const index = globalSentenceIndex++;
-            
+
             // In page mode, skip sentences not on this page
             if (visibleIndices && !visibleIndices.has(index)) continue;
             hasVisible = true;
@@ -415,12 +488,12 @@ function renderSentences(skipSync = false) {
             span.addEventListener('click', () => selectSentence(index));
             p.appendChild(span);
         }
-        
+
         if (!visibleIndices || hasVisible) {
             DOM.textContainer.appendChild(p);
         }
     });
-    
+
     // Update page indicator if in page mode
     if (AppState.pageMode) {
         updatePageIndicator();
@@ -444,11 +517,11 @@ function updatePageIndicator() {
 
 function selectSentence(index) {
     if (index < 0 || index >= AppState.sentences.length) return;
-    
-// Removing old active
+
+    // Removing old active
     const oldActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (oldActive) oldActive.classList.remove('active');
-    
+
     // Setting new active
     AppState.progress = index;
     localStorage.setItem('tts_progress', AppState.progress);
@@ -456,10 +529,10 @@ function selectSentence(index) {
     if (AppState.currentFileName) {
         saveReadingProgress(AppState.currentFileName, index);
     }
-    
+
     const newActive = DOM.textContainer.querySelector(`.sentence[data-index="${AppState.progress}"]`);
     if (newActive) newActive.classList.add('active');
-    
+
     // In page mode, flip to the page containing the new sentence (no auto-scroll in scroll mode)
     if (AppState.pageMode) {
         const targetPage = findPageForSentence(index);
@@ -469,7 +542,7 @@ function selectSentence(index) {
             DOM.appMain.scrollTo({ top: 0, behavior: 'auto' });
         }
     }
-    
+
     if (AppState.isPlaying) {
         playCurrentSentence();
     }
@@ -501,7 +574,7 @@ function syncViewToSentence() {
         if (active) active.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
-    
+
     // Page Mode: find which page contains the active sentence and switch to it
     const targetPage = findPageForSentence(AppState.progress);
     if (targetPage !== AppState.currentPage) {
@@ -615,11 +688,11 @@ async function fetchVoices() {
                 'Ocp-Apim-Subscription-Key': AppState.apiKey
             }
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch voices');
 
         const voices = await response.json();
-        
+
         // Populate Select
         DOM.voiceSelect.innerHTML = '';
         voices.forEach(voice => {
@@ -678,22 +751,22 @@ async function playCurrentSentence() {
     }
 
     updatePlayBtnUI(); // Ensure UI reflects loading/playing state immediately
-    
+
     // Check if we already synthesized this exact sentence with these settings in persistent Cache
     const cacheKey = `${AppState.voice}_${AppState.speed}_${textToRead}`;
     const cachedBlob = await getAudioFromCache(cacheKey);
-    
+
     if (cachedBlob) {
         if (currentGen !== playGeneration) return;
-        
+
         const url = URL.createObjectURL(cachedBlob);
         currentAudio.src = url;
-        
+
         currentAudio.onended = () => {
             if (currentGen !== playGeneration) return; // Prevent old hooks
-            
+
             URL.revokeObjectURL(url); // clean up memory after play
-            
+
             if (AppState.isPlaying) {
                 if (AppState.progress < AppState.sentences.length - 1) {
                     jumpSentence(1);
@@ -706,7 +779,7 @@ async function playCurrentSentence() {
 
         currentAudio.removeEventListener('ended', currentAudio.onended);
         currentAudio.addEventListener('ended', currentAudio.onended);
-        
+
         try {
             await currentAudio.play();
         } catch (e) {
@@ -740,25 +813,25 @@ async function playCurrentSentence() {
         });
 
         if (!response.ok) throw new Error('Failed to synthesize speech');
-        
+
         // If a new sentence was requested while we were fetching this one, abort.
         if (currentGen !== playGeneration) return;
 
         const blob = await response.blob();
-        
+
         // Save the Blob permanently to IndexedDB
         saveAudioToCache(cacheKey, blob);
-        
+
         const url = URL.createObjectURL(blob);
-        
+
         // Use the existing audio element to satisfy Mobile Safari/Edge gesture constraints
         currentAudio.src = url;
-        
+
         // Ensure event listener triggers for next play
         currentAudio.onended = () => {
             if (currentGen !== playGeneration) return; // Prevent old hooks from firing
             URL.revokeObjectURL(url); // Clean memory buffer when finished
-            
+
             if (AppState.isPlaying) {
                 if (AppState.progress < AppState.sentences.length - 1) {
                     jumpSentence(1);
@@ -773,7 +846,7 @@ async function playCurrentSentence() {
         // Fallback for some browsers that aggressively suspend audio
         currentAudio.removeEventListener('ended', currentAudio.onended);
         currentAudio.addEventListener('ended', currentAudio.onended);
-        
+
         await currentAudio.play();
     } catch (err) {
         if (currentGen !== playGeneration) return;
@@ -808,7 +881,7 @@ function updatePlayBtnUI() {
 function togglePlayPause() {
     AppState.isPlaying = !AppState.isPlaying;
     updatePlayBtnUI();
-    
+
     if (AppState.isPlaying) {
         playCurrentSentence();
     } else {
@@ -820,11 +893,11 @@ async function preloadSentence(index) {
     if (index < 0 || index >= AppState.sentences.length) return;
     const textToRead = AppState.sentences[index];
     if (!textToRead || !/\p{L}|\p{N}/u.test(textToRead)) return;
-    
+
     // Check if already in persistent Cache
     const cacheKey = `${AppState.voice}_${AppState.speed}_${textToRead}`;
     const cachedBlob = await getAudioFromCache(cacheKey);
-    if (cachedBlob) return; 
+    if (cachedBlob) return;
 
     // Fetch and cache silently in background
     try {
