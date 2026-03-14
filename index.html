@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TXT Reader & Azure TTS</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-left">
+            <h1>Reader</h1>
+            <label for="file-upload" class="btn btn-primary" title="Load TXT file">
+                <i class="ph ph-folder-open"></i> Load File
+            </label>
+            <input id="file-upload" type="file" accept=".txt" style="display: none;" />
+            <span id="file-name" class="file-name">No file loaded</span>
+        </div>
+        <div class="header-right">
+            <button id="theme-toggle" class="icon-btn" title="Toggle Theme">
+                <i class="ph ph-moon"></i>
+            </button>
+            <button id="settings-btn" class="icon-btn" title="Settings">
+                <i class="ph ph-gear"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div id="text-container" class="text-container">
+            <div class="empty-state">
+                <i class="ph ph-book-open"></i>
+                <p>Load a text file to start reading</p>
+            </div>
+        </div>
+    </main>
+
+    <div class="bottom-controller glass">
+        <div class="controller-inner">
+            <div class="controls-left">
+                <button id="btn-focus" class="icon-btn" title="Focus on active sentence">
+                    <i class="ph ph-crosshair"></i>
+                </button>
+            </div>
+            <div class="controls-center">
+                <button id="btn-prev" class="icon-btn large" title="Previous sentence">
+                    <i class="ph ph-caret-line-left"></i>
+                </button>
+                <button id="btn-play-pause" class="icon-btn x-large play-btn" title="Play">
+                    <i class="ph ph-play-circle"></i>
+                </button>
+                <button id="btn-next" class="icon-btn large" title="Next sentence">
+                    <i class="ph ph-caret-line-right"></i>
+                </button>
+            </div>
+            <div class="controls-right">
+                <div class="voice-selector">
+                    <i class="ph ph-user-sound"></i>
+                    <select id="voice-select" title="Select Voice">
+                        <option value="">No voices available (Check settings)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-backdrop hidden">
+        <div class="modal glass">
+            <div class="modal-header">
+                <h2>Azure TTS Settings</h2>
+                <button id="close-settings" class="icon-btn"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="azure-key">Subscription Key</label>
+                    <input type="password" id="azure-key" placeholder="Enter Azure Key" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="azure-region">Region</label>
+                    <input type="text" id="azure-region" placeholder="e.g. eastus" autocomplete="off">
+                </div>
+                <button id="save-settings" class="btn btn-primary full-width">Save Settings</button>
+                <p class="settings-hint">You need an active Azure Cognitive Services speech resource to use TTS.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
