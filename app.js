@@ -7,6 +7,7 @@ const AppState = {
     theme: localStorage.getItem('tts_theme') || 'dark',
     pageMode: localStorage.getItem('tts_pageMode') === 'true',
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
+    fontFamily: localStorage.getItem('tts_fontFamily') || "'Lora', Georgia, serif",
     currentFileName: localStorage.getItem('tts_current_filename') || '',
     sentences: [],
     paragraphData: [],
@@ -61,6 +62,7 @@ const DOM = {
     clearCacheBtn: document.getElementById('clear-cache-btn'),
     cacheSizeSpan: document.getElementById('cache-size'),
     maxChars: document.getElementById('max-chars'),
+    fontFamilySelect: document.getElementById('font-family'),
     azureKey: document.getElementById('azure-key'),
     azureRegion: document.getElementById('azure-region'),
     toastContainer: document.getElementById('toast-container'),
@@ -79,6 +81,7 @@ const DOM = {
 
 async function init() {
     applyTheme(AppState.theme);
+    applyFontFamily(AppState.fontFamily);
     applyPageMode(AppState.pageMode);
     await initDB();
     setupEventListeners();
@@ -167,17 +170,20 @@ function setupEventListeners() {
         AppState.apiKey = DOM.azureKey.value.trim();
         AppState.region = DOM.azureRegion.value.trim();
         AppState.maxChars = parseInt(DOM.maxChars.value) || 200;
-
+        AppState.fontFamily = DOM.fontFamilySelect.value;
+        
         localStorage.setItem('tts_apiKey', AppState.apiKey);
         localStorage.setItem('tts_region', AppState.region);
         localStorage.setItem('tts_maxChars', AppState.maxChars);
+        localStorage.setItem('tts_fontFamily', AppState.fontFamily);
 
+        applyFontFamily(AppState.fontFamily);
         DOM.settingsModal.classList.add('hidden');
         showToast('Settings saved successfully');
 
         fetchVoices();
 
-        // Reparse text with new chunk limits
+        // Reparse text with new limits or fonts
         const savedText = localStorage.getItem('tts_current_text');
         if (savedText) {
             parseAndRenderText(savedText, true);
@@ -252,6 +258,10 @@ function applyTheme(theme) {
     icon.className = theme === 'dark' ? 'ph ph-sun' : 'ph ph-moon';
 }
 
+function applyFontFamily(font) {
+    document.documentElement.style.setProperty('--font-reading', font);
+}
+
 function applyPageMode(isPageMode) {
     if (isPageMode) {
         document.body.classList.add('page-mode-active');
@@ -307,6 +317,7 @@ function populateSettingsModal() {
     DOM.azureKey.value = AppState.apiKey;
     DOM.azureRegion.value = AppState.region;
     DOM.maxChars.value = AppState.maxChars;
+    DOM.fontFamilySelect.value = AppState.fontFamily;
     updateCacheSizeUI();
 }
 
@@ -479,7 +490,7 @@ function buildPages() {
     probe.style.cssText = [
         'position:absolute', 'top:-9999px', 'left:0',
         `width:${DOM.textContainer.offsetWidth || 752}px`,
-        'font-family:"Lora",Georgia,serif',
+        `font-family:${AppState.fontFamily}`,
         'font-size:20px', 'line-height:1.8',
         'visibility:hidden', 'pointer-events:none'
     ].join(';');
