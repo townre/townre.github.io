@@ -78,8 +78,6 @@ function setupEventListeners() {
     });
 
     // File Upload
-    DOM.modeToggle.addEventListener('click', () => { AppState.pageMode = !AppState.pageMode; localStorage.setItem('tts_pageMode', AppState.pageMode); applyPageMode(AppState.pageMode); });
-
     DOM.fileUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
