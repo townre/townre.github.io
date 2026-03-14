@@ -102,13 +102,14 @@ body {
 }
 
 .btn-primary {
-    background-color: var(--accent);
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
     color: white;
+    box-shadow: 0 4px 12px var(--highlight);
 }
 
 .btn-primary:hover {
-    background-color: var(--accent-hover);
-    transform: translateY(-1px);
+    box-shadow: 0 6px 16px var(--highlight);
+    transform: translateY(-2px);
 }
 
 .icon-btn {
@@ -120,21 +121,36 @@ body {
     color: var(--text-secondary);
     font-size: 24px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: var(--radius-full);
     width: 40px;
     height: 40px;
 }
 
 .icon-btn:hover {
-    color: var(--text-primary);
-    background-color: var(--bg-surface);
+    color: var(--accent);
+    background-color: var(--highlight);
+    transform: scale(1.05);
+}
+
+.icon-btn:active {
+    transform: scale(0.95);
 }
 
 .icon-btn.large { font-size: 32px; width: 48px; height: 48px; }
 .icon-btn.x-large { font-size: 48px; width: 64px; height: 64px; }
-.icon-btn.play-btn { color: var(--accent); }
-.icon-btn.play-btn:hover { color: var(--accent-hover); transform: scale(1.05); }
+
+.icon-btn.play-btn { 
+    color: var(--accent);
+    background-color: var(--highlight);
+    box-shadow: 0 4px 12px var(--highlight);
+}
+.icon-btn.play-btn:hover { 
+    color: white; 
+    background-color: var(--accent);
+    transform: scale(1.1); 
+    box-shadow: 0 6px 16px var(--highlight);
+}
 
 /* Layout */
 .app-header {

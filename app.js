@@ -262,6 +262,7 @@ function focusActiveSentence() {
 // Azure TTS logic
 let currentAudio = new Audio();
 let playGeneration = 0; // Async race condition guard
+const AudioCache = new Map();
 
 async function fetchVoices() {
     if (!AppState.apiKey || !AppState.region) return;
@@ -335,6 +336,37 @@ async function playCurrentSentence() {
     }
 
     updatePlayBtnUI(); // Ensure UI reflects loading/playing state immediately
+    
+    // Check if we already synthesized this exact sentence with these settings
+    const cacheKey = `${AppState.voice}_${AppState.speed}_${textToRead}`;
+    if (AudioCache.has(cacheKey)) {
+        if (currentGen !== playGeneration) return;
+        
+        currentAudio.src = AudioCache.get(cacheKey);
+        
+        currentAudio.onended = () => {
+            if (currentGen !== playGeneration) return; // Prevent old hooks from firing
+            
+            if (AppState.isPlaying) {
+                if (AppState.progress < AppState.sentences.length - 1) {
+                    jumpSentence(1);
+                } else {
+                    AppState.isPlaying = false;
+                    updatePlayBtnUI();
+                }
+            }
+        };
+
+        currentAudio.removeEventListener('ended', currentAudio.onended);
+        currentAudio.addEventListener('ended', currentAudio.onended);
+        
+        try {
+            await currentAudio.play();
+        } catch (e) {
+            console.error(e);
+        }
+        return;
+    }
 
     try {
         const ssml = `
@@ -363,13 +395,10 @@ async function playCurrentSentence() {
         if (currentGen !== playGeneration) return;
 
         const blob = await response.blob();
-        
-        // Revoke the old URL to prevent memory leaks if it exists
-        if (currentAudio.src && currentAudio.src.startsWith('blob:')) {
-            URL.revokeObjectURL(currentAudio.src);
-        }
-        
         const url = URL.createObjectURL(blob);
+        
+        // Cache this sentence 
+        AudioCache.set(cacheKey, url);
         
         // Use the existing audio element to satisfy Mobile Safari/Edge gesture constraints
         currentAudio.src = url;
