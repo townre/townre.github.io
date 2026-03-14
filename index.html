@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TXT Reader & Azure TTS</title>
+    <!-- Prevent FOUC (Flash of Unstyled Content) by applying theme before anything renders -->
+    <script>
+        const savedTheme = localStorage.getItem('tts_theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'light') {
+            document.documentElement.style.backgroundColor = '#ffffff';
+        } else {
+            document.documentElement.style.backgroundColor = '#000000';
+        }
+    </script>
     <link rel="stylesheet" href="styles.css">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
