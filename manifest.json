@@ -1,0 +1,17 @@
+{
+  "name": "TXT TTS Reader",
+  "short_name": "Reader",
+  "description": "Text-to-Speech TXT Reader with Azure integration",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
