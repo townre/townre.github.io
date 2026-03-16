@@ -159,6 +159,18 @@ function setupEventListeners() {
         reader.readAsText(file);
     });
 
+    // Media Session Handlers
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => {
+            if (!AppState.isPlaying) togglePlayPause();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+            if (AppState.isPlaying) togglePlayPause();
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => jumpSentence(-1));
+        navigator.mediaSession.setActionHandler('nexttrack', () => jumpSentence(1));
+    }
+
     // Settings Modal
     DOM.settingsBtn.addEventListener('click', () => DOM.settingsModal.classList.remove('hidden'));
     DOM.closeSettings.addEventListener('click', () => DOM.settingsModal.classList.add('hidden'));
@@ -877,6 +889,8 @@ async function playCurrentSentence() {
     const cacheKey = `${AppState.voice}_${AppState.speed}_${textToRead}`;
     const cachedBlob = await getAudioFromCache(cacheKey);
 
+    updateMediaSessionMetadata();
+
     // Background preload the next two sentences
     preloadSentence(AppState.progress + 1);
     preloadSentence(AppState.progress + 2);
@@ -995,8 +1009,27 @@ function updatePlayBtnUI() {
     const playIcon = DOM.btnPlayPause.querySelector('i');
     if (AppState.isPlaying) {
         playIcon.className = 'ph ph-pause-circle';
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
     } else {
         playIcon.className = 'ph ph-play-circle';
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+    }
+}
+
+function updateMediaSessionMetadata() {
+    if ('mediaSession' in navigator) {
+        const textToRead = AppState.sentences[AppState.progress] || '';
+        const chapter = AppState.chapters.slice().reverse().find(c => c.sentenceIndex <= AppState.progress);
+        const chapterTitle = chapter ? chapter.title : 'Unknown Chapter';
+
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: textToRead.substring(0, 40) + (textToRead.length > 40 ? '...' : ''),
+            artist: AppState.currentFileName || 'TXT Reader',
+            album: chapterTitle,
+            artwork: [
+                { src: 'icon.svg', sizes: '512x512', type: 'image/svg+xml' }
+            ]
+        });
     }
 }
 
