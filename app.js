@@ -1021,7 +1021,6 @@ async function playCurrentSentence() {
                     // Once playing, wait for meta and start the early trigger loop
                     const meta = await metaPromise;
                     if (meta && meta.speechEnd < meta.duration - 0.1) {
-                        /* DISABLED FOR TESTING: Programmatic "Cut"
                         if (silenceCheckInterval) clearInterval(silenceCheckInterval);
                         silenceCheckInterval = setInterval(() => {
                             // Trigger next sentence as soon as we hit the speechEnd boundary
@@ -1030,7 +1029,6 @@ async function playCurrentSentence() {
                                 triggerNextSentence();
                             }
                         }, 50);
-                        */
                     }
                 });
             }
