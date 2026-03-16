@@ -219,6 +219,26 @@ function setupEventListeners() {
         }
     });
 
+    // Mouse Wheel for Page Mode
+    let wheelThrottleTimer = null;
+    document.addEventListener('wheel', (e) => {
+        if (!AppState.pageMode) return;
+        if (DOM.settingsModal.classList.contains('hidden') === false) return;
+        if (DOM.tocPanel.classList.contains('open')) return;
+        
+        if (wheelThrottleTimer) return;
+        
+        if (e.deltaY > 0) {
+            turnPage(1);
+        } else if (e.deltaY < 0) {
+            turnPage(-1);
+        }
+
+        wheelThrottleTimer = setTimeout(() => {
+            wheelThrottleTimer = null;
+        }, 300);
+    }, { passive: true });
+
     // Speed Selector
     DOM.speedSelect.value = AppState.speed;
     DOM.speedSelect.addEventListener('change', (e) => {
