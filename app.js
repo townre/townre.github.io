@@ -1016,24 +1016,44 @@ function updatePlayBtnUI() {
     }
 }
 
+let lastMediaTitle = '';
 function updateMediaSessionMetadata() {
     if ('mediaSession' in navigator) {
         const textToRead = AppState.sentences[AppState.progress] || '';
-        const chapter = AppState.chapters.slice().reverse().find(c => c.sentenceIndex <= AppState.progress);
-        const chapterTitle = chapter ? chapter.title : 'Unknown Chapter';
+        const title = textToRead.substring(0, 40) + (textToRead.length > 40 ? '...' : '');
 
+        if (title === lastMediaTitle) return; // Prevent unnecessary updates
+        lastMediaTitle = title;
+
+        let chapterTitle = 'Unknown Chapter';
+        for (let i = AppState.chapters.length - 1; i >= 0; i--) {
+            if (AppState.chapters[i].sentenceIndex <= AppState.progress) {
+                chapterTitle = AppState.chapters[i].title;
+                break;
+            }
+        }
+
+        // SVG artwork causes massive lag on Android System UI when updated frequently.
+        // It's removed entirely to fix performance issues.
         navigator.mediaSession.metadata = new MediaMetadata({
-            title: textToRead.substring(0, 40) + (textToRead.length > 40 ? '...' : ''),
+            title: title,
             artist: AppState.currentFileName || 'TXT Reader',
-            album: chapterTitle,
-            artwork: [
-                { src: 'icon.svg', sizes: '512x512', type: 'image/svg+xml' }
-            ]
+            album: chapterTitle
         });
     }
 }
 
+let audioUnlocked = false;
+
 function togglePlayPause() {
+    // Mobile browsers require a synchronous play() trigger by a user gesture to unlock audio
+    if (!audioUnlocked) {
+        audioUnlocked = true;
+        currentAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        currentAudio.play().catch(() => {});
+        currentAudio.pause();
+    }
+
     AppState.isPlaying = !AppState.isPlaying;
     updatePlayBtnUI();
 
