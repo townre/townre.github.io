@@ -955,6 +955,7 @@ async function playCurrentSentence() {
 
     if (cachedBlob) {
         if (currentGen !== playGeneration) return;
+        console.log(`[Audio Debug] Playing from Cache: ${cacheKey.substring(0, 30)}...`);
 
         const url = URL.createObjectURL(cachedBlob);
         currentAudio.src = url;
@@ -975,6 +976,8 @@ async function playCurrentSentence() {
                     </prosody>
                 </voice>
             </speak>`;
+        
+        console.log(`[Audio Debug] Fetching from Azure. SSML:`, ssml);
 
         const response = await fetch(`https://${AppState.region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
             method: 'POST',
