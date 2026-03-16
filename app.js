@@ -814,11 +814,15 @@ let audioB = new Audio();
 let currentAudio = audioA;
 let playGeneration = 0; // Async race condition guard
 
+window.lastAudioEndedTime = 0; // DEBUG: Gap tracking
+
 // Add event listeners to both to handle continuous playback natively
 function setupAudioEndedHook(audioElement) {
     audioElement.addEventListener('ended', () => {
         // Prevent old hooks
         if (audioElement.dataset.gen !== playGeneration.toString()) return; 
+
+        window.lastAudioEndedTime = performance.now(); // DEBUG: Mark end time
 
         if (audioElement.src) {
              URL.revokeObjectURL(audioElement.src);
@@ -928,24 +932,44 @@ async function playCurrentSentence() {
     preloadSentence(AppState.progress + 1);
     preloadSentence(AppState.progress + 2);
 
+    // DEBUG: Gap Tracking Function
+    const triggerAudioPlay = async () => {
+        try {
+            if (window.lastAudioEndedTime > 0) {
+                const playCallGap = performance.now() - window.lastAudioEndedTime;
+                console.log(`[Audio Gap Tracker] JS Execution Time (ended -> play() called): ${playCallGap.toFixed(2)}ms`);
+
+                currentAudio.addEventListener('playing', function _onPlaying() {
+                   const actualPlayGap = performance.now() - window.lastAudioEndedTime;
+                   console.log(`[Audio Gap Tracker] Total Real World Gap (ended -> browser actually outputting sound): ${actualPlayGap.toFixed(2)}ms`);
+                   // Reset tracker
+                   window.lastAudioEndedTime = 0;
+                   currentAudio.removeEventListener('playing', _onPlaying);
+                });
+            }
+            await currentAudio.play();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     if (cachedBlob) {
         if (currentGen !== playGeneration) return;
 
         const url = URL.createObjectURL(cachedBlob);
         currentAudio.src = url;
 
-        try {
-            await currentAudio.play();
-        } catch (e) {
-            console.error(e);
-        }
+        triggerAudioPlay();
         return;
     }
 
     try {
         const ssml = `
-            <speak version='1.0' xml:lang='en-US'>
-                <voice xml:lang='en-US' xml:gender='Neural' name='${AppState.voice}'>
+            <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
+                <voice name='${AppState.voice}'>
+                    <mstts:silence  type='Sentenceboundary' value='0ms'/>
+                    <mstts:silence  type='Tailing' value='0ms'/>
+                    <mstts:silence  type='Leading' value='0ms'/>
                     <prosody rate='${AppState.speed}'>
                         ${escapeXml(textToRead)}
                     </prosody>
@@ -976,7 +1000,7 @@ async function playCurrentSentence() {
         const url = URL.createObjectURL(blob);
         currentAudio.src = url;
 
-        await currentAudio.play();
+        triggerAudioPlay();
     } catch (err) {
         if (currentGen !== playGeneration) return;
         console.error(err);
@@ -1070,8 +1094,11 @@ async function preloadSentence(index) {
     // Fetch and cache silently in background
     try {
         const ssml = `
-            <speak version='1.0' xml:lang='en-US'>
-                <voice xml:lang='en-US' xml:gender='Neural' name='${AppState.voice}'>
+            <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
+                <voice name='${AppState.voice}'>
+                    <mstts:silence  type='Sentenceboundary' value='0ms'/>
+                    <mstts:silence  type='Tailing' value='0ms'/>
+                    <mstts:silence  type='Leading' value='0ms'/>
                     <prosody rate='${AppState.speed}'>
                         ${escapeXml(textToRead)}
                     </prosody>
