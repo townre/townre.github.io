@@ -260,6 +260,30 @@ body {
     margin-bottom: 1.5em;
 }
 
+.dl-sentence-audio {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 8px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    vertical-align: middle;
+    opacity: 0.6;
+}
+
+.dl-sentence-audio:hover {
+    background-color: var(--accent);
+    color: white;
+    opacity: 1;
+}
+
 /* Controller */
 .bottom-controller {
     position: fixed;

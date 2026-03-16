@@ -611,6 +611,32 @@ function renderSentences(skipSync = false) {
             hasVisible = true;
 
             const sentenceText = AppState.sentences[index];
+
+            // Add download button before the sentence
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'dl-sentence-audio';
+            dlBtn.innerHTML = '<i class="ph ph-download-simple"></i>';
+            dlBtn.title = 'Download audio';
+            dlBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const text = AppState.sentences[index];
+                const cacheKey = `${AppState.voice}_${AppState.speed}_${text}`;
+                const blob = await getAudioFromCache(cacheKey);
+                if (blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `sentence_${index + 1}.mp3`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                } else {
+                    showToast('Audio not in cache. Play it first.');
+                }
+            });
+            p.appendChild(dlBtn);
+
             const span = document.createElement('span');
             span.className = `sentence ${index === AppState.progress ? 'active' : ''}`;
             span.textContent = sentenceText + ' ';
