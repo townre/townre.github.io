@@ -809,8 +809,36 @@ function getCacheSize() {
 }
 
 // Azure TTS logic
-let currentAudio = new Audio();
+let audioA = new Audio();
+let audioB = new Audio();
+let currentAudio = audioA;
 let playGeneration = 0; // Async race condition guard
+
+// Add event listeners to both to handle continuous playback natively
+function setupAudioEndedHook(audioElement) {
+    audioElement.addEventListener('ended', () => {
+        // Prevent old hooks
+        if (audioElement.dataset.gen !== playGeneration.toString()) return; 
+
+        if (audioElement.src) {
+             URL.revokeObjectURL(audioElement.src);
+             audioElement.removeAttribute('src'); // Clean memory buffer when finished
+             audioElement.load(); // Force release file handle on mobile
+        }
+
+        if (AppState.isPlaying) {
+            if (AppState.progress < AppState.sentences.length - 1) {
+                jumpSentence(1);
+            } else {
+                AppState.isPlaying = false;
+                updatePlayBtnUI();
+            }
+        }
+    });
+}
+setupAudioEndedHook(audioA);
+setupAudioEndedHook(audioB);
+
 
 async function fetchVoices() {
     if (!AppState.apiKey || !AppState.region) return;
@@ -866,7 +894,12 @@ async function playCurrentSentence() {
         return;
     }
 
+    // Stop current audio before starting next (if skipping manually)
     currentAudio.pause();
+
+    // Swap buffers to prevent gapless stuttering and "src changing while playing" mobile bugs
+    currentAudio = currentAudio === audioA ? audioB : audioA;
+    currentAudio.dataset.gen = currentGen.toString();
 
     const textToRead = AppState.sentences[AppState.progress];
     if (!textToRead) return;
@@ -900,24 +933,6 @@ async function playCurrentSentence() {
 
         const url = URL.createObjectURL(cachedBlob);
         currentAudio.src = url;
-
-        currentAudio.onended = () => {
-            if (currentGen !== playGeneration) return; // Prevent old hooks
-
-            URL.revokeObjectURL(url); // clean up memory after play
-
-            if (AppState.isPlaying) {
-                if (AppState.progress < AppState.sentences.length - 1) {
-                    jumpSentence(1);
-                } else {
-                    AppState.isPlaying = false;
-                    updatePlayBtnUI();
-                }
-            }
-        };
-
-        currentAudio.removeEventListener('ended', currentAudio.onended);
-        currentAudio.addEventListener('ended', currentAudio.onended);
 
         try {
             await currentAudio.play();
@@ -959,29 +974,7 @@ async function playCurrentSentence() {
         saveAudioToCache(cacheKey, blob);
 
         const url = URL.createObjectURL(blob);
-
-        // Use the existing audio element to satisfy Mobile Safari/Edge gesture constraints
         currentAudio.src = url;
-
-        // Ensure event listener triggers for next play
-        currentAudio.onended = () => {
-            if (currentGen !== playGeneration) return; // Prevent old hooks from firing
-            URL.revokeObjectURL(url); // Clean memory buffer when finished
-
-            if (AppState.isPlaying) {
-                if (AppState.progress < AppState.sentences.length - 1) {
-                    jumpSentence(1);
-                } else {
-                    // Reached end
-                    AppState.isPlaying = false;
-                    updatePlayBtnUI();
-                }
-            }
-        };
-
-        // Fallback for some browsers that aggressively suspend audio
-        currentAudio.removeEventListener('ended', currentAudio.onended);
-        currentAudio.addEventListener('ended', currentAudio.onended);
 
         await currentAudio.play();
     } catch (err) {
