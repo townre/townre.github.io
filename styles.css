@@ -238,18 +238,19 @@ body {
 .sentence {
     cursor: pointer;
     border-radius: 4px;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-    padding: 2px 0;
+    transition: background-color 0.2s ease;
+    padding: 2px 4px;
+    margin: 0 -4px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
 }
 
 .sentence:hover {
     background-color: var(--bg-surface);
-    box-shadow: 0 0 0 2px var(--bg-surface);
 }
 
 .sentence.active {
     background-color: var(--highlight);
-    box-shadow: 0 0 0 4px var(--highlight);
     color: var(--text-primary);
     position: relative;
     z-index: 1;
