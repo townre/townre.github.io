@@ -841,30 +841,73 @@ let currentAudio = audioA;
 let playGeneration = 0; // Async race condition guard
 
 window.lastAudioEndedTime = 0; // DEBUG: Gap tracking
+const audioMetadata = new Map(); // Cache for speech boundaries { duration, speechEnd }
+let silenceCheckInterval = null;
+
+// Detects the real speech end time in an audio blob by scanning samples from the end
+async function detectAudioBoundary(blob, cacheKey) {
+    if (audioMetadata.has(cacheKey)) return audioMetadata.get(cacheKey);
+
+    try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        
+        const data = audioBuffer.getChannelData(0);
+        const sampleRate = audioBuffer.sampleRate;
+        const threshold = 0.01; // Silence threshold
+        
+        let lastSpeakIndex = data.length - 1;
+        // Scan backwards to find the last sample above threshold
+        for (let i = data.length - 1; i >= 0; i--) {
+            if (Math.abs(data[i]) > threshold) {
+                lastSpeakIndex = i;
+                break;
+            }
+        }
+
+        const speechEnd = lastSpeakIndex / sampleRate;
+        const meta = { duration: audioBuffer.duration, speechEnd: speechEnd };
+        audioMetadata.set(cacheKey, meta);
+        console.log(`[Audio Debug] Silence Detection: ${meta.duration.toFixed(2)}s total, speech ends at ${meta.speechEnd.toFixed(2)}s`);
+        return meta;
+    } catch (e) {
+        console.warn("Silence detection failed", e);
+        return null;
+    }
+}
 
 // Add event listeners to both to handle continuous playback natively
 function setupAudioEndedHook(audioElement) {
     audioElement.addEventListener('ended', () => {
-        // Prevent old hooks
+        // Prevent old hooks or if we already jumped early
         if (audioElement.dataset.gen !== playGeneration.toString()) return; 
 
         window.lastAudioEndedTime = performance.now(); // DEBUG: Mark end time
-
-        if (audioElement.src) {
-             URL.revokeObjectURL(audioElement.src);
-             audioElement.removeAttribute('src'); // Clean memory buffer when finished
-             audioElement.load(); // Force release file handle on mobile
-        }
-
-        if (AppState.isPlaying) {
-            if (AppState.progress < AppState.sentences.length - 1) {
-                jumpSentence(1);
-            } else {
-                AppState.isPlaying = false;
-                updatePlayBtnUI();
-            }
-        }
+        triggerNextSentence();
     });
+}
+
+function triggerNextSentence() {
+    if (silenceCheckInterval) {
+        clearInterval(silenceCheckInterval);
+        silenceCheckInterval = null;
+    }
+
+    if (currentAudio.src) {
+         URL.revokeObjectURL(currentAudio.src);
+         currentAudio.removeAttribute('src'); // Clean memory buffer when finished
+         currentAudio.load(); // Force release file handle on mobile
+    }
+
+    if (AppState.isPlaying) {
+        if (AppState.progress < AppState.sentences.length - 1) {
+            jumpSentence(1);
+        } else {
+            AppState.isPlaying = false;
+            updatePlayBtnUI();
+        }
+    }
 }
 setupAudioEndedHook(audioA);
 setupAudioEndedHook(audioB);
@@ -959,18 +1002,34 @@ async function playCurrentSentence() {
     preloadSentence(AppState.progress + 2);
 
     // DEBUG: Gap Tracking Function
-    const triggerAudioPlay = async () => {
+    const triggerAudioPlay = async (blob, cacheKey) => {
         try {
+            // Start silence detection in background
+            const metaPromise = detectAudioBoundary(blob, cacheKey);
+
             if (window.lastAudioEndedTime > 0) {
                 const playCallGap = performance.now() - window.lastAudioEndedTime;
                 console.log(`[Audio Gap Tracker] JS Execution Time (ended -> play() called): ${playCallGap.toFixed(2)}ms`);
 
-                currentAudio.addEventListener('playing', function _onPlaying() {
+                currentAudio.addEventListener('playing', async function _onPlaying() {
                    const actualPlayGap = performance.now() - window.lastAudioEndedTime;
                    console.log(`[Audio Gap Tracker] Total Real World Gap (ended -> browser actually outputting sound): ${actualPlayGap.toFixed(2)}ms`);
                    // Reset tracker
                    window.lastAudioEndedTime = 0;
                    currentAudio.removeEventListener('playing', _onPlaying);
+
+                   // Once playing, wait for meta and start the early trigger loop
+                   const meta = await metaPromise;
+                   if (meta && meta.speechEnd < meta.duration - 0.1) {
+                       if (silenceCheckInterval) clearInterval(silenceCheckInterval);
+                       silenceCheckInterval = setInterval(() => {
+                           // Trigger next sentence as soon as we hit the speechEnd boundary
+                           if (currentAudio.currentTime >= meta.speechEnd) {
+                               console.log(`[Audio Debug] Early Trigger: Silence start reached at ${currentAudio.currentTime.toFixed(2)}s`);
+                               triggerNextSentence();
+                           }
+                       }, 50);
+                   }
                 });
             }
             await currentAudio.play();
@@ -986,7 +1045,7 @@ async function playCurrentSentence() {
         const url = URL.createObjectURL(cachedBlob);
         currentAudio.src = url;
 
-        triggerAudioPlay();
+        triggerAudioPlay(cachedBlob, cacheKey);
         return;
     }
 
@@ -994,9 +1053,9 @@ async function playCurrentSentence() {
         const ssml = `
             <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
                 <voice name='${AppState.voice}'>
-                    <mstts:silence  type='Sentenceboundary' value='0ms'/>
-                    <mstts:silence  type='Tailing' value='0ms'/>
-                    <mstts:silence  type='Leading' value='0ms'/>
+                    <mstts:silence  type='Sentenceboundary-exact' value='0ms'/>
+                    <mstts:silence  type='Tailing-exact' value='0ms'/>
+                    <mstts:silence  type='Leading-exact' value='0ms'/>
                     <prosody rate='${AppState.speed}'>
                         ${escapeXml(textToRead)}
                     </prosody>
@@ -1029,7 +1088,7 @@ async function playCurrentSentence() {
         const url = URL.createObjectURL(blob);
         currentAudio.src = url;
 
-        triggerAudioPlay();
+        triggerAudioPlay(blob, cacheKey);
     } catch (err) {
         if (currentGen !== playGeneration) return;
         console.error(err);
@@ -1125,9 +1184,9 @@ async function preloadSentence(index) {
         const ssml = `
             <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
                 <voice name='${AppState.voice}'>
-                    <mstts:silence  type='Sentenceboundary' value='0ms'/>
-                    <mstts:silence  type='Tailing' value='0ms'/>
-                    <mstts:silence  type='Leading' value='0ms'/>
+                    <mstts:silence  type='Sentenceboundary-exact' value='0ms'/>
+                    <mstts:silence  type='Tailing-exact' value='0ms'/>
+                    <mstts:silence  type='Leading-exact' value='0ms'/>
                     <prosody rate='${AppState.speed}'>
                         ${escapeXml(textToRead)}
                     </prosody>
