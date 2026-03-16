@@ -183,7 +183,7 @@ function setupEventListeners() {
         AppState.region = DOM.azureRegion.value.trim();
         AppState.maxChars = parseInt(DOM.maxChars.value) || 200;
         AppState.fontFamily = DOM.fontFamilySelect.value;
-        
+
         localStorage.setItem('tts_apiKey', AppState.apiKey);
         localStorage.setItem('tts_region', AppState.region);
         localStorage.setItem('tts_maxChars', AppState.maxChars);
@@ -237,9 +237,9 @@ function setupEventListeners() {
         if (!AppState.pageMode) return;
         if (DOM.settingsModal.classList.contains('hidden') === false) return;
         if (DOM.tocPanel.classList.contains('open')) return;
-        
+
         if (wheelThrottleTimer) return;
-        
+
         if (e.deltaY > 0) {
             turnPage(1);
         } else if (e.deltaY < 0) {
@@ -852,11 +852,11 @@ async function detectAudioBoundary(blob, cacheKey) {
         const arrayBuffer = await blob.arrayBuffer();
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        
+
         const data = audioBuffer.getChannelData(0);
         const sampleRate = audioBuffer.sampleRate;
         const threshold = 0.01; // Silence threshold
-        
+
         let lastSpeakIndex = data.length - 1;
         // Scan backwards to find the last sample above threshold
         for (let i = data.length - 1; i >= 0; i--) {
@@ -881,7 +881,7 @@ async function detectAudioBoundary(blob, cacheKey) {
 function setupAudioEndedHook(audioElement) {
     audioElement.addEventListener('ended', () => {
         // Prevent old hooks or if we already jumped early
-        if (audioElement.dataset.gen !== playGeneration.toString()) return; 
+        if (audioElement.dataset.gen !== playGeneration.toString()) return;
 
         window.lastAudioEndedTime = performance.now(); // DEBUG: Mark end time
         triggerNextSentence();
@@ -895,9 +895,9 @@ function triggerNextSentence() {
     }
 
     if (currentAudio.src) {
-         URL.revokeObjectURL(currentAudio.src);
-         currentAudio.removeAttribute('src'); // Clean memory buffer when finished
-         currentAudio.load(); // Force release file handle on mobile
+        URL.revokeObjectURL(currentAudio.src);
+        currentAudio.removeAttribute('src'); // Clean memory buffer when finished
+        currentAudio.load(); // Force release file handle on mobile
     }
 
     if (AppState.isPlaying) {
@@ -1012,24 +1012,26 @@ async function playCurrentSentence() {
                 console.log(`[Audio Gap Tracker] JS Execution Time (ended -> play() called): ${playCallGap.toFixed(2)}ms`);
 
                 currentAudio.addEventListener('playing', async function _onPlaying() {
-                   const actualPlayGap = performance.now() - window.lastAudioEndedTime;
-                   console.log(`[Audio Gap Tracker] Total Real World Gap (ended -> browser actually outputting sound): ${actualPlayGap.toFixed(2)}ms`);
-                   // Reset tracker
-                   window.lastAudioEndedTime = 0;
-                   currentAudio.removeEventListener('playing', _onPlaying);
+                    const actualPlayGap = performance.now() - window.lastAudioEndedTime;
+                    console.log(`[Audio Gap Tracker] Total Real World Gap (ended -> browser actually outputting sound): ${actualPlayGap.toFixed(2)}ms`);
+                    // Reset tracker
+                    window.lastAudioEndedTime = 0;
+                    currentAudio.removeEventListener('playing', _onPlaying);
 
-                   // Once playing, wait for meta and start the early trigger loop
-                   const meta = await metaPromise;
-                   if (meta && meta.speechEnd < meta.duration - 0.1) {
-                       if (silenceCheckInterval) clearInterval(silenceCheckInterval);
-                       silenceCheckInterval = setInterval(() => {
-                           // Trigger next sentence as soon as we hit the speechEnd boundary
-                           if (currentAudio.currentTime >= meta.speechEnd) {
-                               console.log(`[Audio Debug] Early Trigger: Silence start reached at ${currentAudio.currentTime.toFixed(2)}s`);
-                               triggerNextSentence();
-                           }
-                       }, 50);
-                   }
+                    // Once playing, wait for meta and start the early trigger loop
+                    const meta = await metaPromise;
+                    if (meta && meta.speechEnd < meta.duration - 0.1) {
+                        /* DISABLED FOR TESTING: Programmatic "Cut"
+                        if (silenceCheckInterval) clearInterval(silenceCheckInterval);
+                        silenceCheckInterval = setInterval(() => {
+                            // Trigger next sentence as soon as we hit the speechEnd boundary
+                            if (currentAudio.currentTime >= meta.speechEnd) {
+                                console.log(`[Audio Debug] Early Trigger: Silence start reached at ${currentAudio.currentTime.toFixed(2)}s`);
+                                triggerNextSentence();
+                            }
+                        }, 50);
+                        */
+                    }
                 });
             }
             await currentAudio.play();
@@ -1061,7 +1063,7 @@ async function playCurrentSentence() {
                     </prosody>
                 </voice>
             </speak>`;
-        
+
         console.log(`[Audio Debug] Fetching from Azure. SSML:`, ssml);
 
         const response = await fetch(`https://${AppState.region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
@@ -1155,7 +1157,7 @@ function togglePlayPause() {
     if (!audioUnlocked) {
         audioUnlocked = true;
         currentAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-        currentAudio.play().catch(() => {});
+        currentAudio.play().catch(() => { });
         currentAudio.pause();
     }
 
