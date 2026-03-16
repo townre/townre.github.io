@@ -8,6 +8,7 @@ const AppState = {
     pageMode: localStorage.getItem('tts_pageMode') === 'true',
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
     fontFamily: localStorage.getItem('tts_fontFamily') || "'Lora', Georgia, serif",
+    sentenceGap: parseFloat(localStorage.getItem('tts_sentenceGap')) || 0.3,
     currentFileName: localStorage.getItem('tts_current_filename') || '',
     sentences: [],
     paragraphData: [],
@@ -65,6 +66,8 @@ const DOM = {
     fontFamilySelect: document.getElementById('font-family'),
     azureKey: document.getElementById('azure-key'),
     azureRegion: document.getElementById('azure-region'),
+    sentenceGap: document.getElementById('sentence-gap'),
+    sentenceGapValue: document.getElementById('sentence-gap-value'),
     toastContainer: document.getElementById('toast-container'),
     // ToC Panel
     tocPanel: document.getElementById('toc-panel'),
@@ -183,11 +186,13 @@ function setupEventListeners() {
         AppState.region = DOM.azureRegion.value.trim();
         AppState.maxChars = parseInt(DOM.maxChars.value) || 200;
         AppState.fontFamily = DOM.fontFamilySelect.value;
+        AppState.sentenceGap = parseFloat(DOM.sentenceGap.value);
 
         localStorage.setItem('tts_apiKey', AppState.apiKey);
         localStorage.setItem('tts_region', AppState.region);
         localStorage.setItem('tts_maxChars', AppState.maxChars);
         localStorage.setItem('tts_fontFamily', AppState.fontFamily);
+        localStorage.setItem('tts_sentenceGap', AppState.sentenceGap);
 
         applyFontFamily(AppState.fontFamily);
         DOM.settingsModal.classList.add('hidden');
@@ -248,8 +253,13 @@ function setupEventListeners() {
 
         wheelThrottleTimer = setTimeout(() => {
             wheelThrottleTimer = null;
-        }, 300);
+        }, 100);
     }, { passive: true });
+
+    // Settings Live Updates
+    DOM.sentenceGap.addEventListener('input', (e) => {
+        DOM.sentenceGapValue.textContent = e.target.value;
+    });
 
     // Speed Selector
     DOM.speedSelect.value = AppState.speed;
@@ -350,6 +360,8 @@ function populateSettingsModal() {
     DOM.azureRegion.value = AppState.region;
     DOM.maxChars.value = AppState.maxChars;
     DOM.fontFamilySelect.value = AppState.fontFamily;
+    DOM.sentenceGap.value = AppState.sentenceGap;
+    DOM.sentenceGapValue.textContent = AppState.sentenceGap;
     updateCacheSizeUI();
 }
 
@@ -1048,9 +1060,10 @@ async function playCurrentSentence() {
                                return;
                            }
                            
-                           // Trigger next sentence as soon as we hit the speechEnd boundary
-                           if (targetAudio.currentTime >= meta.speechEnd) {
-                               console.log(`[Audio Debug] Early Trigger for sentence ${AppState.progress + 1} at ${targetAudio.currentTime.toFixed(2)}s`);
+                           // Trigger next sentence as soon as we hit the speechEnd boundary + the natural gap
+                           const targetTriggerTime = meta.speechEnd + AppState.sentenceGap;
+                           if (targetAudio.currentTime >= targetTriggerTime) {
+                               console.log(`[Audio Debug] Early Trigger for sentence ${AppState.progress + 1} at ${targetAudio.currentTime.toFixed(2)}s (Speech end: ${meta.speechEnd.toFixed(2)}s, Gap: ${AppState.sentenceGap}s)`);
                                triggerNextSentence(targetAudio);
                            }
                        }, 40);
