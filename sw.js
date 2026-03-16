@@ -1,4 +1,4 @@
-const CACHE_NAME = 'txt-reader-v1';
+const CACHE_NAME = 'txt-reader-v2';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -28,29 +28,30 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    // Ignore non-GET requests
-    if (event.request.method !== 'GET') return;
+    // Ignore non-GET requests or cross-origin requests
+    if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+        return;
+    }
     
-    // Dynamic caching strategy: Cache First, fallback to Network
+    // Dynamic caching strategy: Stale-While-Revalidate
     event.respondWith(
-        caches.match(event.request)
-            .then(cachedResponse => {
-                if (cachedResponse) return cachedResponse;
-                
-                return fetch(event.request).then(response => {
-                    // Check if we received a valid response
-                    if (!response || response.status !== 200 || response.type !== 'basic') {
-                        return response;
-                    }
-                    
-                    // Clone the response because it's a stream and can only be consumed once
-                    const responseToCache = response.clone();
+        caches.match(event.request).then(cachedResponse => {
+            // The fetch promise that will update the cache
+            const fetchPromise = fetch(event.request).then(networkResponse => {
+                // Check if we received a valid response
+                if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+                    const responseToCache = networkResponse.clone();
                     caches.open(CACHE_NAME).then(cache => {
                         cache.put(event.request, responseToCache);
                     });
-                    
-                    return response;
-                });
-            })
+                }
+                return networkResponse;
+            }).catch(err => {
+                console.error('Fetch failed:', err);
+            });
+
+            // Return cached response immediately if available, otherwise wait for network
+            return cachedResponse || fetchPromise;
+        })
     );
 });
