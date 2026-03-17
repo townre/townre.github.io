@@ -894,6 +894,8 @@ function getCacheSize() {
 let audioA = new Audio();
 let audioB = new Audio();
 let currentAudio = audioA;
+let silentLoop = new Audio(); // Persistent silent loop to keep process alive
+let wakeLock = null;
 let playGeneration = 0; // Async race condition guard
 
 window.lastAudioEndedTime = 0; // DEBUG: Gap tracking
@@ -977,6 +979,8 @@ function triggerNextSentence(targetAudioElement) {
             jumpSentence(1);
         } else {
             AppState.isPlaying = false;
+            stopSilentLoop();
+            releaseWakeLock();
             updatePlayBtnUI();
         }
     }
@@ -1056,6 +1060,8 @@ async function playCurrentSentence() {
             setTimeout(() => jumpSentence(1), 50); // Visual delay before skipping
         } else {
             AppState.isPlaying = false;
+            stopSilentLoop();
+            releaseWakeLock();
             updatePlayBtnUI();
         }
         return;
@@ -1178,6 +1184,8 @@ async function playCurrentSentence() {
         console.error(err);
         showToast('Playback failed. Check API key/region.');
         AppState.isPlaying = false;
+        stopSilentLoop();
+        releaseWakeLock();
         updatePlayBtnUI();
     }
 }
@@ -1232,6 +1240,51 @@ function updateMediaSessionMetadata() {
     }
 }
 
+/**
+ * Screen Wake Lock & Background Playback Helpers
+ */
+async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('[Background Fix] Wake Lock acquired');
+        } catch (err) {
+            console.warn('[Background Fix] Wake Lock failed:', err.message);
+        }
+    }
+}
+
+function releaseWakeLock() {
+    if (wakeLock) {
+        wakeLock.release().then(() => {
+            wakeLock = null;
+            console.log('[Background Fix] Wake Lock released');
+        });
+    }
+}
+
+function startSilentLoop() {
+    // 1-second silent WAV data URI
+    if (!silentLoop.src) {
+        silentLoop.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+        silentLoop.loop = true;
+    }
+    silentLoop.play().catch(() => {});
+    console.log('[Background Fix] Silent loop started');
+}
+
+function stopSilentLoop() {
+    silentLoop.pause();
+    console.log('[Background Fix] Silent loop stopped');
+}
+
+// Re-acquire wake lock when app returns to foreground
+document.addEventListener('visibilitychange', async () => {
+    if (AppState.isPlaying && document.visibilityState === 'visible') {
+        await requestWakeLock();
+    }
+});
+
 let audioUnlocked = false;
 
 function togglePlayPause() {
@@ -1247,8 +1300,12 @@ function togglePlayPause() {
     updatePlayBtnUI();
 
     if (AppState.isPlaying) {
+        startSilentLoop();
+        requestWakeLock();
         playCurrentSentence();
     } else {
+        stopSilentLoop();
+        releaseWakeLock();
         currentAudio.pause();
     }
 }
