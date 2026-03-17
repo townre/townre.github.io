@@ -89,6 +89,7 @@ async function init() {
     await initDB();
     setupEventListeners();
     populateSettingsModal();
+    handleLaunchQueue();
 
     // Check if we have previously loaded text in localStorage
     const savedText = localStorage.getItem('tts_current_text');
@@ -291,6 +292,40 @@ function setupEventListeners() {
             if (vp != null) restoreViewport(vp);
         }, 250);
     });
+}
+
+/**
+ * Handles the PWA Launch Queue (File Handling API)
+ * Allows opening files via "Open with" in the OS
+ */
+function handleLaunchQueue() {
+    if ('launchQueue' in window) {
+        launchQueue.setConsumer(async (launchParams) => {
+            if (!launchParams.files || launchParams.files.length === 0) return;
+
+            const fileHandle = launchParams.files[0];
+            const file = await fileHandle.getFile();
+            const text = await file.text();
+            
+            // Re-use existing file loading logic
+            DOM.fileName.textContent = file.name;
+            try {
+                localStorage.setItem('tts_current_text', text);
+                localStorage.setItem('tts_current_filename', file.name);
+            } catch (err) {
+                console.warn("Opened file too large for localStorage.");
+            }
+
+            AppState.currentFileName = file.name;
+            const { reading, viewport } = getFileProgress(file.name);
+            AppState.progress = reading;
+            localStorage.setItem('tts_progress', reading);
+            AppState._restoreViewport = viewport;
+            
+            parseAndRenderText(text);
+            showToast(`Opened: ${file.name}`);
+        });
+    }
 }
 
 function applyTheme(theme) {
