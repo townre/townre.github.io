@@ -8,6 +8,8 @@ const AppState = {
     pageMode: localStorage.getItem('tts_pageMode') === 'true',
     progress: parseInt(localStorage.getItem('tts_progress')) || 0,
     fontFamily: localStorage.getItem('tts_fontFamily') || "'Lora', Georgia, serif",
+    fontSize: parseInt(localStorage.getItem('tts_fontSize')) || 20,
+    lineHeight: parseFloat(localStorage.getItem('tts_lineHeight')) || 1.8,
     sentenceGap: parseFloat(localStorage.getItem('tts_sentenceGap')) || 0.3,
     currentFileName: localStorage.getItem('tts_current_filename') || '',
     sentences: [],
@@ -68,6 +70,10 @@ const DOM = {
     azureRegion: document.getElementById('azure-region'),
     sentenceGap: document.getElementById('sentence-gap'),
     sentenceGapValue: document.getElementById('sentence-gap-value'),
+    fontSize: document.getElementById('font-size'),
+    fontSizeValue: document.getElementById('font-size-value'),
+    lineHeight: document.getElementById('line-height'),
+    lineHeightValue: document.getElementById('line-height-value'),
     toastContainer: document.getElementById('toast-container'),
     // ToC Panel
     tocPanel: document.getElementById('toc-panel'),
@@ -85,6 +91,8 @@ const DOM = {
 async function init() {
     applyTheme(AppState.theme);
     applyFontFamily(AppState.fontFamily);
+    applyFontSize(AppState.fontSize);
+    applyLineHeight(AppState.lineHeight);
     applyPageMode(AppState.pageMode);
     await initDB();
     setupEventListeners();
@@ -187,15 +195,21 @@ function setupEventListeners() {
         AppState.region = DOM.azureRegion.value.trim();
         AppState.maxChars = parseInt(DOM.maxChars.value) || 200;
         AppState.fontFamily = DOM.fontFamilySelect.value;
+        AppState.fontSize = parseInt(DOM.fontSize.value) || 20;
+        AppState.lineHeight = parseFloat(DOM.lineHeight.value) || 1.8;
         AppState.sentenceGap = parseFloat(DOM.sentenceGap.value);
 
         localStorage.setItem('tts_apiKey', AppState.apiKey);
         localStorage.setItem('tts_region', AppState.region);
         localStorage.setItem('tts_maxChars', AppState.maxChars);
         localStorage.setItem('tts_fontFamily', AppState.fontFamily);
+        localStorage.setItem('tts_fontSize', AppState.fontSize);
+        localStorage.setItem('tts_lineHeight', AppState.lineHeight);
         localStorage.setItem('tts_sentenceGap', AppState.sentenceGap);
 
         applyFontFamily(AppState.fontFamily);
+        applyFontSize(AppState.fontSize);
+        applyLineHeight(AppState.lineHeight);
         DOM.settingsModal.classList.add('hidden');
         showToast('Settings saved successfully');
 
@@ -260,6 +274,14 @@ function setupEventListeners() {
     // Settings Live Updates
     DOM.sentenceGap.addEventListener('input', (e) => {
         DOM.sentenceGapValue.textContent = e.target.value;
+    });
+
+    DOM.fontSize.addEventListener('input', (e) => {
+        DOM.fontSizeValue.textContent = e.target.value;
+    });
+
+    DOM.lineHeight.addEventListener('input', (e) => {
+        DOM.lineHeightValue.textContent = e.target.value;
     });
 
     // Speed Selector
@@ -339,6 +361,14 @@ function applyFontFamily(font) {
     document.documentElement.style.setProperty('--font-reading', font);
 }
 
+function applyFontSize(size) {
+    document.documentElement.style.setProperty('--font-size-reading', `${size}px`);
+}
+
+function applyLineHeight(lh) {
+    document.documentElement.style.setProperty('--line-height-reading', lh);
+}
+
 function applyPageMode(isPageMode) {
     if (isPageMode) {
         document.body.classList.add('page-mode-active');
@@ -395,6 +425,10 @@ function populateSettingsModal() {
     DOM.azureRegion.value = AppState.region;
     DOM.maxChars.value = AppState.maxChars;
     DOM.fontFamilySelect.value = AppState.fontFamily;
+    DOM.fontSize.value = AppState.fontSize;
+    DOM.fontSizeValue.textContent = AppState.fontSize;
+    DOM.lineHeight.value = AppState.lineHeight;
+    DOM.lineHeightValue.textContent = AppState.lineHeight;
     DOM.sentenceGap.value = AppState.sentenceGap;
     DOM.sentenceGapValue.textContent = AppState.sentenceGap;
     updateCacheSizeUI();
@@ -658,31 +692,6 @@ function renderSentences(skipSync = false) {
             hasVisible = true;
 
             const sentenceText = AppState.sentences[index];
-
-            // Add download button before the sentence
-            const dlBtn = document.createElement('button');
-            dlBtn.className = 'dl-sentence-audio';
-            dlBtn.innerHTML = '<i class="ph ph-download-simple"></i>';
-            dlBtn.title = 'Download audio';
-            dlBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const text = AppState.sentences[index];
-                const cacheKey = `${AppState.voice}_${AppState.speed}_${text}`;
-                const blob = await getAudioFromCache(cacheKey);
-                if (blob) {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `sentence_${index + 1}.mp3`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    setTimeout(() => URL.revokeObjectURL(url), 100);
-                } else {
-                    showToast('Audio not in cache. Play it first.');
-                }
-            });
-            p.appendChild(dlBtn);
 
             const span = document.createElement('span');
             span.className = `sentence ${index === AppState.progress ? 'active' : ''}`;
